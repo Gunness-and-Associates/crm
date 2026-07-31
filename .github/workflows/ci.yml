@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The project pins PHP 8.3; 8.2 is also tested so local XAMPP (8.2) stays valid.
+        php: ['8.2', '8.3']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          # pcntl/posix are real here (Linux) so Horizon's platform requirement is genuinely met.
+          extensions: mbstring, dom, fileinfo, pdo, sqlite3, pdo_sqlite, intl, bcmath, gd, zip, curl, pcntl, posix
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ matrix.php }}-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Code style (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Static analysis (PHPStan, level max)
+        run: vendor/bin/phpstan analyse --no-progress
+
+      - name: Tests (Pest)
+        # Tests run on SQLite in-memory (see phpunit.xml). A MySQL 8 service and a
+        # migrate-on-MySQL check are added in Z-1.2, when the first first-party
+        # migrations (users, settings, metadata registry) land.
+        run: vendor/bin/pest

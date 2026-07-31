@@ -1,0 +1,11 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: max
+    paths:
+        - app
+        - routes
+    # Zero-baseline at level max. Scope is app + routes for now; first-party migrations, factories and
+    # seeders join analysis as they are authored (Z-1.2+). Third-party published migrations (e.g. spatie
+    # permission) read config() as mixed and are intentionally not analysed.

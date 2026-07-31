@@ -1,0 +1,8 @@
+{
+    "preset": "laravel",
+    "exclude": [
+        "docs",
+        "_analysis",
+        "scripts"
+    ]
+}
