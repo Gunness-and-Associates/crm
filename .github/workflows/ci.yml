@@ -67,6 +67,10 @@ jobs:
           DB_DATABASE: newcrmga_test
           DB_USERNAME: root
           DB_PASSWORD: root
+          # No Redis service in CI — keep boot/cache/queue off Redis for this step.
+          CACHE_STORE: array
+          QUEUE_CONNECTION: sync
+          SESSION_DRIVER: array
         run: php artisan migrate --force
 
       - name: Code style (Pint)
