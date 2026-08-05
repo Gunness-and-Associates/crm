@@ -35,6 +35,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $related_module_id
  * @property string|null $related_display_field
  * @property bool $is_custom
+ * @property bool $is_system
  * @property int $sort_order
  */
 class Field extends Model
@@ -50,7 +51,7 @@ class Field extends Model
         'module_id', 'name', 'type', 'label_key', 'storage', 'required', 'default_value',
         'validation', 'audited', 'filterable', 'sortable', 'mass_update', 'duplicate_merge',
         'reportable', 'importable', 'help', 'comments', 'max_length', 'precision', 'scale',
-        'option_list_id', 'related_module_id', 'related_display_field', 'is_custom', 'sort_order',
+        'option_list_id', 'related_module_id', 'related_display_field', 'is_custom', 'is_system', 'sort_order',
     ];
 
     /** @return array<string, string> */
@@ -67,6 +68,7 @@ class Field extends Model
             'reportable' => 'boolean',
             'importable' => 'boolean',
             'is_custom' => 'boolean',
+            'is_system' => 'boolean',
             'max_length' => 'integer',
             'precision' => 'integer',
             'scale' => 'integer',

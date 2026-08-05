@@ -8,6 +8,8 @@ use App\Models\Metadata\Module;
 use App\Models\Metadata\OptionItem;
 use App\Models\Metadata\OptionList;
 use App\Support\MetadataRepository;
+use App\Support\SchemaManager\SchemaManager;
+use App\Support\SchemaManager\Snapshotter;
 use App\Support\Settings;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -21,6 +23,8 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(Settings::class);
         $this->app->singleton(MetadataRepository::class);
+        $this->app->singleton(Snapshotter::class);
+        $this->app->singleton(SchemaManager::class);
     }
 
     /**

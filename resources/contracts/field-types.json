@@ -1,0 +1,215 @@
+{
+  "$comment": "FROZEN CONTRACT. Backend uses column/cast/validation; frontend uses component/table_cell. Adding a type requires both lanes to agree. Referenced by SchemaManager (DDL) and FieldTypeRegistry (UI).",
+  "version": 1,
+  "types": {
+    "text": {
+      "label": "Text",
+      "column": "varchar(:length)",
+      "length": { "default": 255, "min": 1, "max": 1000 },
+      "cast": "string",
+      "validation": ["nullable", "string", "max::length"],
+      "component": "TextInput",
+      "table_cell": "TextColumn",
+      "filterable": true, "sortable": true, "indexable": true,
+      "options": ["length", "default", "required", "placeholder", "help"]
+    },
+    "textarea": {
+      "label": "Long text",
+      "column": "text",
+      "cast": "string",
+      "validation": ["nullable", "string", "max:65535"],
+      "component": "Textarea",
+      "table_cell": "TextColumn(limit:60)",
+      "filterable": false, "sortable": false, "indexable": false,
+      "options": ["rows", "default", "required", "help"]
+    },
+    "enum": {
+      "label": "Dropdown",
+      "column": "varchar(100)",
+      "cast": "string",
+      "validation": ["nullable", "string", "in::option_values"],
+      "component": "Select(searchable when >8 options)",
+      "table_cell": "BadgeColumn",
+      "filterable": true, "sortable": true, "indexable": true,
+      "requires": ["option_list_id"],
+      "options": ["option_list_id", "default", "required", "help"],
+      "$note": "NEVER use a MySQL ENUM column. Values live in tenant_option_items so an administrator can add one without DDL."
+    },
+    "multienum": {
+      "label": "Multi-select",
+      "column": "json",
+      "cast": "array",
+      "validation": ["nullable", "array", "each:in::option_values"],
+      "component": "Select(multiple)",
+      "table_cell": "BadgeColumn(list)",
+      "filterable": true, "sortable": false, "indexable": false,
+      "requires": ["option_list_id"],
+      "$note": "Filter with JSON_CONTAINS. If a multienum needs heavy filtering, raise it — a pivot table may be warranted."
+    },
+    "bool": {
+      "label": "Checkbox",
+      "column": "tinyint(1)",
+      "default": 0,
+      "cast": "boolean",
+      "validation": ["boolean"],
+      "component": "Toggle",
+      "table_cell": "IconColumn(boolean)",
+      "filterable": true, "sortable": true, "indexable": true,
+      "options": ["default", "help"],
+      "$note": "Never nullable. Default 0."
+    },
+    "int": {
+      "label": "Number",
+      "column": "int",
+      "cast": "integer",
+      "validation": ["nullable", "integer", "min::min", "max::max"],
+      "component": "TextInput(numeric)",
+      "table_cell": "TextColumn(align:right)",
+      "filterable": true, "sortable": true, "indexable": true,
+      "options": ["min", "max", "default", "required", "help"]
+    },
+    "decimal": {
+      "label": "Decimal",
+      "column": "decimal(:precision,:scale)",
+      "precision": { "default": 18, "max": 30 },
+      "scale": { "default": 2, "max": 8 },
+      "cast": "decimal::scale",
+      "validation": ["nullable", "numeric"],
+      "component": "TextInput(numeric)",
+      "table_cell": "TextColumn(align:right)",
+      "filterable": true, "sortable": true, "indexable": true,
+      "options": ["precision", "scale", "default", "required", "help"]
+    },
+    "currency": {
+      "label": "Currency",
+      "column": "decimal(18,4)",
+      "cast": "decimal:4",
+      "validation": ["nullable", "numeric", "min:0"],
+      "component": "TextInput(prefix:currency symbol)",
+      "table_cell": "TextColumn(money, align:right)",
+      "filterable": true, "sortable": true, "indexable": true,
+      "options": ["currency_code", "default", "required", "help"],
+      "$note": "Always decimal, never float. Scale 4 so exchange-rate maths does not lose cents."
+    },
+    "date": {
+      "label": "Date",
+      "column": "date",
+      "cast": "date",
+      "validation": ["nullable", "date"],
+      "component": "DatePicker",
+      "table_cell": "TextColumn(date)",
+      "filterable": true, "sortable": true, "indexable": true,
+      "options": ["default", "required", "min_date", "max_date", "help"]
+    },
+    "datetime": {
+      "label": "Date and time",
+      "column": "datetime",
+      "cast": "datetime",
+      "validation": ["nullable", "date"],
+      "component": "DateTimePicker",
+      "table_cell": "TextColumn(datetime)",
+      "filterable": true, "sortable": true, "indexable": true,
+      "options": ["default", "required", "help"],
+      "$note": "STORED AND TRANSMITTED IN UTC as 'Y-m-d H:i:s'. Displayed in the viewer's time zone. Parsing must never depend on the authenticated principal's locale."
+    },
+    "email": {
+      "label": "Email",
+      "column": "varchar(255)",
+      "cast": "string",
+      "validation": ["nullable", "email:rfc", "max:255"],
+      "component": "TextInput(email)",
+      "table_cell": "TextColumn(copyable, mailto)",
+      "filterable": true, "sortable": true, "indexable": true,
+      "options": ["required", "help"]
+    },
+    "phone": {
+      "label": "Phone",
+      "column": "varchar(50)",
+      "cast": "string",
+      "validation": ["nullable", "string", "max:50"],
+      "component": "TextInput(tel)",
+      "table_cell": "TextColumn(copyable)",
+      "filterable": true, "sortable": false, "indexable": true,
+      "options": ["required", "help"],
+      "$note": "Store as entered but strip invisible Unicode marks (U+200E, U+200F, U+202A-U+202E) and zero-width characters on save. No telephony integration — display only."
+    },
+    "url": {
+      "label": "URL",
+      "column": "varchar(500)",
+      "cast": "string",
+      "validation": ["nullable", "url", "max:500"],
+      "component": "TextInput(url)",
+      "table_cell": "TextColumn(link)",
+      "filterable": false, "sortable": false, "indexable": false,
+      "options": ["required", "help"]
+    },
+    "relate": {
+      "label": "Link to another record",
+      "column": "char(36)",
+      "cast": "string",
+      "validation": ["nullable", "uuid", "exists::related_table,id"],
+      "component": "Select(searchable, remote)",
+      "table_cell": "TextColumn(link to related record)",
+      "filterable": true, "sortable": false, "indexable": true,
+      "requires": ["related_module_id", "related_display_field"],
+      "options": ["related_module_id", "related_display_field", "required", "help"],
+      "$note": "Always add an index. Add a foreign key only when the related module is a core entity (not a Studio-created one)."
+    },
+    "file": {
+      "label": "File",
+      "column": "varchar(500)",
+      "cast": "string",
+      "validation": ["nullable", "file", "max:20480", "mimes::allowed_mimes"],
+      "component": "FileUpload",
+      "table_cell": "TextColumn(download link)",
+      "filterable": false, "sortable": false, "indexable": false,
+      "options": ["allowed_mimes", "max_size", "help"],
+      "$note": "Stores the path only. Access always via the Storage facade so the Phase 8 tenancy switch works unchanged."
+    },
+    "image": {
+      "label": "Image",
+      "column": "varchar(500)",
+      "cast": "string",
+      "validation": ["nullable", "image", "max:8192"],
+      "component": "FileUpload(image, editor)",
+      "table_cell": "ImageColumn",
+      "filterable": false, "sortable": false, "indexable": false,
+      "options": ["max_size", "help"]
+    }
+  },
+  "reserved_field_names": [
+    "id", "created_at", "updated_at", "deleted_at", "created_by", "modified_by",
+    "assigned_user_id", "tenant_id", "tenant", "password", "remember_token",
+    "select", "insert", "update", "delete", "from", "where", "order", "group",
+    "table", "index", "key", "primary", "foreign", "default", "null", "and", "or",
+    "not", "like", "in", "is", "as", "by", "on", "join", "union", "case", "when",
+    "then", "else", "end", "desc", "asc", "limit", "offset", "having", "distinct",
+    "int", "varchar", "text", "date", "datetime", "timestamp", "blob", "json"
+  ],
+  "field_name_pattern": "^[a-z][a-z0-9_]{1,58}$",
+  "type_change_matrix": {
+    "safe_widening": [
+      "text length increase",
+      "text -> textarea",
+      "int -> decimal",
+      "decimal scale or precision increase",
+      "date -> datetime",
+      "adding an option to an option list"
+    ],
+    "requires_confirmation_and_snapshot": [
+      "text length decrease",
+      "textarea -> text",
+      "decimal -> int",
+      "datetime -> date (time component is lost)",
+      "removing an option that is in use",
+      "enum -> text",
+      "making a nullable field required"
+    ],
+    "blocked": [
+      "changing the type of a system or base field",
+      "changing a relate field's related module while data exists",
+      "any change to id, created_at, updated_at, deleted_at, created_by, modified_by, assigned_user_id",
+      "adding a column named tenant_id"
+    ]
+  }
+}

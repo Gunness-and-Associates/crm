@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $base_type
  * @property string|null $icon
  * @property bool $is_custom
+ * @property bool $is_system
  * @property bool $enabled
  * @property int $sort_order
  */
@@ -28,13 +29,13 @@ class Module extends Model
 
     /** @var list<string> */
     protected $fillable = [
-        'key', 'label', 'table_name', 'base_type', 'icon', 'is_custom', 'enabled', 'sort_order',
+        'key', 'label', 'table_name', 'base_type', 'icon', 'is_custom', 'is_system', 'enabled', 'sort_order',
     ];
 
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['is_custom' => 'boolean', 'enabled' => 'boolean', 'sort_order' => 'integer'];
+        return ['is_custom' => 'boolean', 'is_system' => 'boolean', 'enabled' => 'boolean', 'sort_order' => 'integer'];
     }
 
     /** @return HasMany<Field, $this> */

@@ -80,7 +80,11 @@ jobs:
         run: vendor/bin/phpstan analyse --no-progress
 
       - name: Tests (Pest)
-        # Tests run on SQLite in-memory (see phpunit.xml). A MySQL 8 service and a
-        # migrate-on-MySQL check are added in Z-1.2, when the first first-party
-        # migrations (users, settings, metadata registry) land.
+        # Tests run on real MySQL (see phpunit.xml) — SchemaManager's DDL and
+        # mysqldump-based snapshots are MySQL-specific, not SQLite-compatible.
+        env:
+          DB_PASSWORD: root
+          CACHE_STORE: array
+          QUEUE_CONNECTION: sync
+          SESSION_DRIVER: array
         run: vendor/bin/pest
