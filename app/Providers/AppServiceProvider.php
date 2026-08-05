@@ -2,6 +2,12 @@
 
 namespace App\Providers;
 
+use App\Models\Metadata\Field;
+use App\Models\Metadata\Layout;
+use App\Models\Metadata\Module;
+use App\Models\Metadata\OptionItem;
+use App\Models\Metadata\OptionList;
+use App\Support\MetadataRepository;
 use App\Support\Settings;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -14,6 +20,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(Settings::class);
+        $this->app->singleton(MetadataRepository::class);
     }
 
     /**
@@ -33,5 +40,13 @@ class AppServiceProvider extends ServiceProvider
 
             return $this->app->isProduction() ? $rule->uncompromised() : $rule;
         });
+
+        // Bump the compiled-metadata cache version on any registry change, so a Studio
+        // edit is live immediately with no deploy (BACKEND_BRIEF §5).
+        $bump = fn (): int => $this->app->make(MetadataRepository::class)->bump();
+        foreach ([Module::class, Field::class, OptionList::class, OptionItem::class, Layout::class] as $model) {
+            $model::saved($bump);
+            $model::deleted($bump);
+        }
     }
 }

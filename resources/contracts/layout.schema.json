@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://crmga.local/contracts/layout.schema.json",
+  "title": "crmga layout definition",
+  "description": "FROZEN CONTRACT between backend (Zain) and frontend (Shahmeer). Stored in tenant_layouts.definition. The backend guarantees this shape; the frontend renders it. Any change requires a version bump and agreement from both lanes.",
+  "type": "object",
+  "required": ["version", "view", "module", "content"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Schema version of this document. Currently 1."
+    },
+    "view": {
+      "enum": ["list", "detail", "edit", "search"],
+      "description": "Which view this layout describes."
+    },
+    "module": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,58}$",
+      "description": "Module key, e.g. 'leads'."
+    },
+    "content": {
+      "description": "list and search views use 'columns'. detail and edit views use 'panels'.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["columns"],
+          "additionalProperties": false,
+          "properties": {
+            "columns": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["field"],
+                "additionalProperties": false,
+                "properties": {
+                  "field": { "type": "string", "description": "tenant_fields.name, or a virtual key such as 'flags'." },
+                  "label": { "type": ["string", "null"], "description": "Override; null means use the field's own label." },
+                  "width": { "type": ["integer", "null"], "description": "Pixels. Null means auto." },
+                  "priority": { "enum": [1, 2, 3], "default": 1, "description": "1 always visible; 2 hidden below md; 3 opt-in via the column chooser." },
+                  "sortable": { "type": "boolean", "default": true },
+                  "align": { "enum": ["left", "right", "center"], "default": "left" },
+                  "wrap": { "type": "boolean", "default": false },
+                  "link": { "type": "boolean", "default": false, "description": "Render as a link to the record. Exactly one column per list should set this." }
+                }
+              }
+            },
+            "default_sort": {
+              "type": "object",
+              "required": ["field", "direction"],
+              "additionalProperties": false,
+              "properties": {
+                "field": { "type": "string" },
+                "direction": { "enum": ["asc", "desc"] }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["panels"],
+          "additionalProperties": false,
+          "properties": {
+            "tabs": {
+              "type": "array",
+              "description": "Optional. When present, each panel must name a tab via panel.tab.",
+              "items": {
+                "type": "object",
+                "required": ["key", "label"],
+                "additionalProperties": false,
+                "properties": {
+                  "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,40}$" },
+                  "label": { "type": "string" },
+                  "order": { "type": "integer", "minimum": 0 }
+                }
+              }
+            },
+            "panels": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["key", "label", "rows"],
+                "additionalProperties": false,
+                "properties": {
+                  "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,40}$" },
+                  "label": { "type": "string" },
+                  "tab": { "type": ["string", "null"], "description": "Tab key this panel belongs to; null means the first tab." },
+                  "order": { "type": "integer", "minimum": 0 },
+                  "collapsed": { "type": "boolean", "default": false, "description": "Initial state only; the user's choice is remembered client-side." },
+                  "columns": { "enum": [1, 2], "default": 2, "description": "Field grid columns at md and above." },
+                  "visible_when": {
+                    "type": ["object", "null"],
+                    "description": "Conditional visibility, e.g. show the Refugee qualification panel only for that vertical.",
+                    "required": ["field", "operator", "value"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "field": { "type": "string" },
+                      "operator": { "enum": ["eq", "neq", "in", "not_in", "empty", "not_empty"] },
+                      "value": {}
+                    }
+                  },
+                  "rows": {
+                    "type": "array",
+                    "description": "Each row holds one or two field slots. A full-width field occupies the whole row.",
+                    "items": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 2,
+                      "items": {
+                        "type": "object",
+                        "required": ["field"],
+                        "additionalProperties": false,
+                        "properties": {
+                          "field": { "type": "string" },
+                          "label": { "type": ["string", "null"] },
+                          "span": { "enum": ["half", "full"], "default": "half" },
+                          "readonly": { "type": "boolean", "default": false },
+                          "hide_when_empty": { "type": "boolean", "default": true, "description": "Detail view only." },
+                          "required_override": { "type": ["boolean", "null"], "description": "Edit view only. Null means use the field definition." },
+                          "visible_when": { "$ref": "#/properties/content/oneOf/1/properties/panels/items/properties/visible_when" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "examples": [
+    {
+      "version": 1,
+      "view": "list",
+      "module": "leads",
+      "content": {
+        "default_sort": { "field": "created_at", "direction": "desc" },
+        "columns": [
+          { "field": "full_name", "priority": 1, "link": true, "width": 200 },
+          { "field": "vertical", "priority": 1, "width": 150 },
+          { "field": "stage", "priority": 1, "width": 120 },
+          { "field": "primary_email", "priority": 1 },
+          { "field": "phone_mobile", "priority": 1, "sortable": false },
+          { "field": "flags", "priority": 1, "width": 80, "sortable": false, "align": "center" },
+          { "field": "assigned_user_id", "priority": 1, "label": "Owner", "width": 140 },
+          { "field": "primary_address_country", "priority": 2, "label": "Country" },
+          { "field": "source", "priority": 2 },
+          { "field": "last_contacted_at", "priority": 2 },
+          { "field": "created_at", "priority": 3 }
+        ]
+      }
+    },
+    {
+      "version": 1,
+      "view": "detail",
+      "module": "leads",
+      "content": {
+        "tabs": [
+          { "key": "overview", "label": "Overview", "order": 0 },
+          { "key": "history", "label": "History", "order": 1 }
+        ],
+        "panels": [
+          {
+            "key": "contact_details",
+            "label": "Contact details",
+            "tab": "overview",
+            "order": 0,
+            "columns": 2,
+            "rows": [
+              [ { "field": "primary_email" }, { "field": "phone_mobile" } ],
+              [ { "field": "whatsapp_number" }, { "field": "phone_work" } ],
+              [ { "field": "primary_address_street", "span": "full" } ]
+            ]
+          },
+          {
+            "key": "qualification_refugee",
+            "label": "Qualification — Refugee",
+            "tab": "overview",
+            "order": 1,
+            "visible_when": { "field": "vertical", "operator": "eq", "value": "Refugee" },
+            "rows": [
+              [ { "field": "current_situation" }, { "field": "afraid_to_return" } ],
+              [ { "field": "refugee_claim_process", "span": "full" } ]
+            ]
+          },
+          {
+            "key": "call_tracking",
+            "label": "Call tracking",
+            "tab": "overview",
+            "order": 2,
+            "collapsed": true,
+            "rows": [
+              [ { "field": "call_status" }, { "field": "call_attempts" } ],
+              [ { "field": "last_call_summary", "span": "full" } ]
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
