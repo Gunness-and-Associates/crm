@@ -7,6 +7,7 @@ use App\Models\Metadata\Layout;
 use App\Models\Metadata\Module;
 use App\Models\Metadata\OptionItem;
 use App\Models\Metadata\OptionList;
+use App\Support\ContactableBlueprintMacro;
 use App\Support\MetadataRepository;
 use App\Support\SchemaManager\SchemaManager;
 use App\Support\SchemaManager\Snapshotter;
@@ -36,6 +37,8 @@ class AppServiceProvider extends ServiceProvider
         // (this becomes the per-tenant migration path at Phase 8). The default
         // database/migrations/ folder holds only central infrastructure (cache, jobs).
         $this->loadMigrationsFrom(database_path('migrations/tenant'));
+
+        ContactableBlueprintMacro::register();
 
         // Password policy: min 12 with mixed case, numbers and symbols; checked against
         // known breaches in production. Used everywhere via Password::defaults().
