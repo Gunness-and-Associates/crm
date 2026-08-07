@@ -35,13 +35,13 @@ trait HasEmailAddresses
             $this->emailAddresses()
                 ->wherePivot('is_primary', true)
                 ->get()
-                ->each(fn (EmailAddress $e) => $e->pivot?->update(['is_primary' => false]));
+                ->each(fn (EmailAddress $e) => $e->pivot->update(['is_primary' => false]));
         }
 
         $existing = $this->emailAddresses()->wherePivot('email_address_id', $address->id)->first();
 
         if ($existing !== null) {
-            $existing->pivot?->update(['is_primary' => $primary]);
+            $existing->pivot->update(['is_primary' => $primary]);
         } else {
             EmailAddressRelation::query()->create([
                 'related_type' => $this->getMorphClass(),

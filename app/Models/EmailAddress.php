@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $email
  * @property bool $is_invalid
  * @property bool $opted_out
+ * @property-read EmailAddressRelation $pivot  always present when loaded via emailAddresses()
  */
 class EmailAddress extends Model
 {

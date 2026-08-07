@@ -1,5 +1,9 @@
 <?php
 
+use App\Models\Role;
+use App\Models\RoleModulePermission;
+use App\Models\User;
+use App\Support\Acl\AccessLevel;
 use Tests\TestCase;
 
 /*
@@ -41,7 +45,17 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Grants $user a role with $level for one module action (default 'view') —
+ * shared across every ACL-aware test.
+ */
+function grantAccess(User $user, string $moduleKey, AccessLevel $level, string $action = 'view'): void
 {
-    // ..
+    $role = Role::factory()->create();
+    RoleModulePermission::factory()->create([
+        'role_id' => $role->id,
+        'module_key' => $moduleKey,
+        $action => $level,
+    ]);
+    $user->roles()->attach($role);
 }

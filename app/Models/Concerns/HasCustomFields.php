@@ -32,13 +32,11 @@ trait HasCustomFields
 
     protected static function bootHasCustomFields(): void
     {
-        static::retrieved(function (Model $model): void {
-            /** @var HasCustomFields&Model $model */
+        static::retrieved(function (self $model): void {
             $model->mergeCustomAttributesFromSidecar();
         });
 
-        static::saved(function (Model $model): void {
-            /** @var HasCustomFields&Model $model */
+        static::saved(function (self $model): void {
             $model->persistCustomAttributesToSidecar();
         });
     }
@@ -50,7 +48,7 @@ trait HasCustomFields
 
     public function getAttribute($key)
     {
-        if (is_string($key) && in_array($key, $this->customFieldNames(), true)) {
+        if (in_array($key, $this->customFieldNames(), true)) {
             return $this->customFieldValues[$key] ?? null;
         }
 
@@ -59,7 +57,7 @@ trait HasCustomFields
 
     public function setAttribute($key, $value)
     {
-        if (is_string($key) && in_array($key, $this->customFieldNames(), true)) {
+        if (in_array($key, $this->customFieldNames(), true)) {
             $this->customFieldValues[$key] = $this->castAttribute($key, $value);
 
             return $this;
@@ -81,7 +79,14 @@ trait HasCustomFields
      */
     public function getCasts(): array
     {
-        return array_merge(parent::getCasts(), $this->customFieldCasts());
+        $casts = [];
+        foreach (array_merge(parent::getCasts(), $this->customFieldCasts()) as $key => $cast) {
+            if (is_string($key) && is_string($cast)) {
+                $casts[$key] = $cast;
+            }
+        }
+
+        return $casts;
     }
 
     /**
@@ -94,11 +99,11 @@ trait HasCustomFields
             return [];
         }
 
-        return Field::query()
+        return array_values(Field::query()
             ->where('module_id', $module->id)
             ->where('storage', 'column')
             ->get()
-            ->all();
+            ->all());
     }
 
     /**

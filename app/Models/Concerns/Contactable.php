@@ -44,6 +44,13 @@ trait Contactable
 
     public function fullName(): string
     {
-        return trim(sprintf('%s %s', (string) $this->getAttribute('first_name'), (string) $this->getAttribute('last_name')));
+        return trim(sprintf('%s %s', $this->stringAttribute('first_name'), $this->stringAttribute('last_name')));
+    }
+
+    private function stringAttribute(string $key): string
+    {
+        $value = $this->getAttribute($key);
+
+        return is_string($value) || is_numeric($value) ? (string) $value : '';
     }
 }
