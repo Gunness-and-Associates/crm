@@ -47,7 +47,10 @@ class EmailAddressRelation extends MorphPivot
             return;
         }
 
-        $owner = $ownerClass::query()->find($relatedId);
+        // An internal consistency operation, not a user-facing read — must not be
+        // subject to record-visibility ACL (e.g. no acting user in a console/queue
+        // context would otherwise silently skip the sync).
+        $owner = $ownerClass::query()->withoutGlobalScopes()->find($relatedId);
         if (! $owner instanceof Model || ! array_key_exists('primary_email', $owner->getAttributes())) {
             return;
         }

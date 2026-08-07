@@ -7,6 +7,8 @@ use App\Models\Metadata\Layout;
 use App\Models\Metadata\Module;
 use App\Models\Metadata\OptionItem;
 use App\Models\Metadata\OptionList;
+use App\Models\Role;
+use App\Support\Acl;
 use App\Support\ActivityBlueprintMacro;
 use App\Support\ContactableBlueprintMacro;
 use App\Support\Livewire\SubdirectoryHandleRequests;
@@ -29,6 +31,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(MetadataRepository::class);
         $this->app->singleton(Snapshotter::class);
         $this->app->singleton(SchemaManager::class);
+        $this->app->singleton(Acl::class);
 
         // The app may be served from a sub-directory (e.g. XAMPP Apache at
         // /newcrmga/public) rather than a vhost root — see SubdirectoryHandleRequests.
@@ -63,5 +66,11 @@ class AppServiceProvider extends ServiceProvider
             $model::saved($bump);
             $model::deleted($bump);
         }
+
+        // Dynamic ACL registration (BACKEND_BRIEF §8.4): a new module starts 'none' for
+        // every role, and a new role starts 'none' for every module — no silent gaps,
+        // new capability is never granted implicitly.
+        Module::created(fn (Module $module) => $this->app->make(Acl::class)->registerModule($module->key));
+        Role::created(fn (Role $role) => $this->app->make(Acl::class)->registerRole($role->id));
     }
 }

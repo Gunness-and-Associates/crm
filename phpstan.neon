@@ -14,4 +14,6 @@ parameters:
         # paths on purpose), not dead code.
         -
             message: '#is used zero times and is not analysed#'
-            path: app/Models/Concerns/*
+            paths:
+                - app/Models/Concerns/*
+                - app/Support/Acl/HasAcl.php

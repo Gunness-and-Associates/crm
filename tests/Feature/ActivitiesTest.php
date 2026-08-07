@@ -7,6 +7,7 @@ use App\Models\Email;
 use App\Models\Meeting;
 use App\Models\Note;
 use App\Models\Task;
+use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
@@ -15,6 +16,10 @@ use Tests\Fixtures\ContactableFixture;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
+    // Z-2.3 wires ContactableFixture into the ACL engine (HasAcl); these tests are not
+    // about ACL, so act as an admin (unrestricted) throughout.
+    $this->actingAs(User::factory()->create(['is_admin' => true]));
+
     if (! Schema::hasTable('contactable_fixtures')) {
         Schema::create('contactable_fixtures', function (Blueprint $table) {
             $table->uuid('id')->primary();
