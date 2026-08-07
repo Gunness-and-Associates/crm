@@ -19,6 +19,10 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <!-- .env's APP_URL may include a sub-directory path (e.g. serving the app under
+             XAMPP Apache at /newcrmga/public) for real browser access; tests must run
+             against a root URL or route matching against '/' breaks. -->
+        <env name="APP_URL" value="http://localhost"/>
         <!-- owen-it/laravel-auditing skips console runs by default (config/audit.php);
              Pest runs entirely in console context, so tests would never see an audit row. -->
         <env name="AUDITING_CONSOLE" value="true"/>

@@ -9,12 +9,14 @@ use App\Models\Metadata\OptionItem;
 use App\Models\Metadata\OptionList;
 use App\Support\ActivityBlueprintMacro;
 use App\Support\ContactableBlueprintMacro;
+use App\Support\Livewire\SubdirectoryHandleRequests;
 use App\Support\MetadataRepository;
 use App\Support\SchemaManager\SchemaManager;
 use App\Support\SchemaManager\Snapshotter;
 use App\Support\Settings;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Livewire\Mechanisms\HandleRequests\HandleRequests;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -27,6 +29,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(MetadataRepository::class);
         $this->app->singleton(Snapshotter::class);
         $this->app->singleton(SchemaManager::class);
+
+        // The app may be served from a sub-directory (e.g. XAMPP Apache at
+        // /newcrmga/public) rather than a vhost root — see SubdirectoryHandleRequests.
+        $this->app->singleton(HandleRequests::class, SubdirectoryHandleRequests::class);
     }
 
     /**

@@ -15,6 +15,7 @@ phase.
 composer install
 cp .env.example .env
 php artisan key:generate
+php artisan livewire:publish --assets   # see "Serving from a sub-directory" below
 # set your DB credentials in .env, then:
 php artisan migrate
 ```
@@ -23,6 +24,21 @@ php artisan migrate
 ```bash
 php artisan serve   # http://127.0.0.1:8000/admin
 ```
+
+### Serving from a sub-directory (e.g. XAMPP Apache at /newcrmga/public)
+Livewire's update endpoint and script tag are root-relative by default, which breaks under a
+sub-directory — the browser POSTs to `/livewire/update` instead of `/newcrmga/public/livewire/update`
+(404, or a 405 once the request lands on an unrelated route). Two things fix it together:
+1. Set `APP_URL` and `ASSET_URL` to the full sub-directory URL, e.g.
+   `APP_URL=http://localhost/newcrmga/public`.
+2. `App\Support\Livewire\SubdirectoryHandleRequests` (bound in `AppServiceProvider`) overrides
+   `getUpdateUri()` to return an **absolute** URL instead of Livewire's default app-root-relative one.
+3. `php artisan livewire:publish --assets` publishes `livewire.js` into `public/vendor/livewire` (gitignored,
+   regenerate after every `composer update` that touches `livewire/livewire`) so the script tag resolves
+   under `ASSET_URL` as a real static file instead of Livewire's own asset route.
+
+Serving from a vhost root (`php artisan serve`, or an Apache vhost whose `DocumentRoot` is this app's
+`public/`) needs none of this — `APP_URL`/`ASSET_URL` without a path segment work as-is.
 
 ## Quality gates (run before every commit)
 ```bash
