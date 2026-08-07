@@ -19,6 +19,9 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <!-- owen-it/laravel-auditing skips console runs by default (config/audit.php);
+             Pest runs entirely in console context, so tests would never see an audit row. -->
+        <env name="AUDITING_CONSOLE" value="true"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_STORE" value="array"/>

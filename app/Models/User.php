@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * @property string $id
@@ -27,8 +29,10 @@ use Illuminate\Support\Carbon;
  * @property list<string>|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
  */
-class User extends Authenticatable
+class User extends Authenticatable implements AuditableContract
 {
+    use Auditable;
+
     /** @use HasFactory<UserFactory> */
     use HasFactory;
 
@@ -59,6 +63,14 @@ class User extends Authenticatable
 
     /** @var list<string> */
     protected $hidden = [
+        'password',
+        'remember_token',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+    ];
+
+    /** @var list<string> never captured in an audit's before/after values */
+    protected $auditExclude = [
         'password',
         'remember_token',
         'two_factor_secret',
