@@ -28,11 +28,13 @@ class MetadataFixtureSeeder extends Seeder
             'lead_vertical',
             'Lead vertical',
             collect(LeadVertical::cases())->mapWithKeys(fn (LeadVertical $v) => [$v->value => $v->label()])->all(),
+            isSystem: true,
         );
         $stage = $this->optionList(
             'lead_stage',
             'Stage',
             collect(LeadStage::cases())->mapWithKeys(fn (LeadStage $s) => [$s->value => $s->label()])->all(),
+            isSystem: true,
         );
 
         $this->seedLeads($vertical, $stage);
@@ -166,9 +168,9 @@ class MetadataFixtureSeeder extends Seeder
     /**
      * @param  array<string, string>  $items  value => label
      */
-    private function optionList(string $key, string $label, array $items): OptionList
+    private function optionList(string $key, string $label, array $items, bool $isSystem = false): OptionList
     {
-        $list = OptionList::updateOrCreate(['key' => $key], ['label' => $label]);
+        $list = OptionList::updateOrCreate(['key' => $key], ['label' => $label, 'is_system' => $isSystem]);
 
         $order = 0;
         foreach ($items as $value => $itemLabel) {
