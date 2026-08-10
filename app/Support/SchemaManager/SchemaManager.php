@@ -15,10 +15,10 @@ use Illuminate\Support\Facades\Schema;
  * Safe runtime DDL. The single most dangerous class in the system (BACKEND_BRIEF §6) —
  * every ALTER/CREATE the app ever runs against a tenant database goes through here.
  *
- * Scope note: plan()/apply() fully support the 'add' and 'delete' (soft) actions.
- * Physical 'modify' (safe widening / guarded narrowing) is Z-3.1 — validate() already
- * classifies the change via the contract's type_change_matrix so that work slots in
- * without revisiting this class.
+ * plan()/apply() support 'add', 'modify' and 'delete' (soft). validate() classifies
+ * every 'modify' — cross-type via the contract's type_change_matrix, same-type
+ * parameter changes (length/precision/scale/required) by comparing old vs new — into
+ * safe | requires_confirmation | blocked before any DDL is built (Z-3.1).
  */
 final class SchemaManager
 {
@@ -83,12 +83,22 @@ final class SchemaManager
                 $errors[] = "Field [{$r->name}] is a system field and cannot be changed.";
             }
 
-            if ($r->action === 'modify' && $existing !== null && $r->type !== null) {
-                $class = $this->contract->typeChangeClass($existing->type, $r->type);
+            if ($r->action === 'modify' && $existing !== null) {
+                $toType = (string) ($r->type ?? $existing->type);
+
+                if ($r->type !== null && $r->type !== $existing->type) {
+                    $errors = [...$errors, ...$this->validateType($r)];
+                } elseif ($toType === 'text' && $r->option('length') !== null) {
+                    $errors = [...$errors, ...$this->validateTextLength($toType, $r)];
+                } elseif ($toType === 'decimal' && ($r->option('precision') !== null || $r->option('scale') !== null)) {
+                    $errors = [...$errors, ...$this->validateDecimalPrecision($toType, $r)];
+                }
+
+                $class = $this->classifyModify($existing, $r);
                 if ($class === 'blocked') {
-                    $errors[] = "Changing [{$r->name}] from {$existing->type} to {$r->type} is blocked.";
+                    $errors[] = "Changing [{$r->name}] from {$existing->type} to {$toType} is blocked.";
                 } elseif ($class === 'requires_confirmation' && ! $r->confirmLossy) {
-                    $errors[] = "Changing [{$r->name}] from {$existing->type} to {$r->type} requires confirm_lossy.";
+                    $errors[] = "Changing [{$r->name}] from {$existing->type} to {$toType} requires confirm_lossy.";
                 }
             }
         } else {
@@ -120,26 +130,109 @@ final class SchemaManager
         }
 
         if ($type === 'text') {
-            $length = $this->intOption($r, 'length', $this->contract->lengthDefault($type));
-            $min = $this->contract->lengthMin($type);
-            $max = $this->contract->lengthMax($type);
-            if ($length < $min || $length > $max) {
-                $errors[] = "Length [{$length}] outside the allowed range [{$min}, {$max}].";
-            }
+            $errors = [...$errors, ...$this->validateTextLength($type, $r)];
         }
 
         if ($type === 'decimal') {
-            $precision = $this->intOption($r, 'precision', $this->contract->precisionDefault($type));
-            $scale = $this->intOption($r, 'scale', $this->contract->scaleDefault($type));
-            if ($precision > $this->contract->precisionMax($type)) {
-                $errors[] = "Precision [{$precision}] exceeds the contract limit.";
-            }
-            if ($scale > $this->contract->scaleMax($type)) {
-                $errors[] = "Scale [{$scale}] exceeds the contract limit.";
-            }
+            $errors = [...$errors, ...$this->validateDecimalPrecision($type, $r)];
         }
 
         return $errors;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function validateTextLength(string $type, FieldChangeRequest $r): array
+    {
+        $errors = [];
+
+        $length = $this->intOption($r, 'length', $this->contract->lengthDefault($type));
+        $min = $this->contract->lengthMin($type);
+        $max = $this->contract->lengthMax($type);
+        if ($length < $min || $length > $max) {
+            $errors[] = "Length [{$length}] outside the allowed range [{$min}, {$max}].";
+        }
+
+        return $errors;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function validateDecimalPrecision(string $type, FieldChangeRequest $r): array
+    {
+        $errors = [];
+
+        $precision = $this->intOption($r, 'precision', $this->contract->precisionDefault($type));
+        $scale = $this->intOption($r, 'scale', $this->contract->scaleDefault($type));
+        if ($precision > $this->contract->precisionMax($type)) {
+            $errors[] = "Precision [{$precision}] exceeds the contract limit.";
+        }
+        if ($scale > $this->contract->scaleMax($type)) {
+            $errors[] = "Scale [{$scale}] exceeds the contract limit.";
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Classify a 'modify' request as safe | requires_confirmation | blocked | unknown,
+     * covering both cross-type changes (via the contract's matrix) and same-type
+     * parameter changes (length/precision/scale/required) the matrix expresses as
+     * free text rather than a `from -> to` pair.
+     */
+    private function classifyModify(Field $existing, FieldChangeRequest $r): string
+    {
+        $fromType = (string) $existing->type;
+        $toType = (string) ($r->type ?? $fromType);
+
+        if ($fromType !== $toType) {
+            return $this->contract->typeChangeClass($fromType, $toType);
+        }
+
+        if ($toType === 'text' && $r->option('length') !== null) {
+            $newLength = $this->intOption($r, 'length', $this->contract->lengthDefault($toType));
+            $oldLength = $existing->max_length ?? $this->contract->lengthDefault($toType);
+
+            return $newLength >= $oldLength ? 'safe' : 'requires_confirmation';
+        }
+
+        if ($toType === 'decimal' && ($r->option('precision') !== null || $r->option('scale') !== null)) {
+            $oldPrecision = $existing->precision ?? $this->contract->precisionDefault($toType);
+            $oldScale = $existing->scale ?? $this->contract->scaleDefault($toType);
+            $newPrecision = $this->intOption($r, 'precision', $oldPrecision);
+            $newScale = $this->intOption($r, 'scale', $oldScale);
+
+            return ($newPrecision >= $oldPrecision && $newScale >= $oldScale) ? 'safe' : 'requires_confirmation';
+        }
+
+        if ($r->option('required') === true && ! $existing->required) {
+            return 'requires_confirmation';
+        }
+
+        $relatedModuleId = $this->stringOption($r, 'related_module_id');
+        if ($toType === 'relate' && $relatedModuleId !== null && $relatedModuleId !== $existing->related_module_id) {
+            return $this->relateColumnHasData($existing) ? 'blocked' : 'safe';
+        }
+
+        return 'safe';
+    }
+
+    private function relateColumnHasData(Field $existing): bool
+    {
+        $module = $existing->module;
+        $tableName = $module?->table_name;
+        if ($module === null || $tableName === null) {
+            return false;
+        }
+
+        $table = $module->is_custom ? $tableName : $tableName.'_custom';
+        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $existing->name)) {
+            return false;
+        }
+
+        return DB::table($table)->whereNotNull($existing->name)->exists();
     }
 
     private function configInt(string $key, int $default): int
@@ -186,10 +279,14 @@ final class SchemaManager
             return new ChangePlan(request: $r, table: (string) $module->table_name, ddl: []);
         }
 
-        // action === 'add'
         $baseTable = (string) $module->table_name;
         $table = $module->is_custom ? $baseTable : $baseTable.'_custom';
 
+        if ($r->action === 'modify') {
+            return $this->planModify($r, $module, $table);
+        }
+
+        // action === 'add'
         $ddl = [];
         if (! Schema::hasTable($table)) {
             $ddl[] = $this->createSidecarSql($table);
@@ -202,6 +299,15 @@ final class SchemaManager
             $this->ident($r->name),
             $columnSql,
         );
+
+        if ($this->contract->indexable((string) $r->type)) {
+            $ddl[] = sprintf(
+                'ALTER TABLE %s ADD INDEX %s (%s)',
+                $this->ident($table),
+                $this->ident('idx_'.$r->name),
+                $this->ident($r->name),
+            );
+        }
 
         return new ChangePlan(
             request: $r,
@@ -226,6 +332,48 @@ final class SchemaManager
                 'filterable' => $this->contract->filterable((string) $r->type),
                 'sortable' => $this->contract->sortable((string) $r->type),
                 'is_custom' => true,
+            ],
+        );
+    }
+
+    private function planModify(FieldChangeRequest $r, Module $module, string $table): ChangePlan
+    {
+        $existing = Field::query()
+            ->where('module_id', $module->id)
+            ->where('name', $r->name)
+            ->firstOrFail();
+
+        $type = (string) ($r->type ?? $existing->type);
+
+        $columnSql = $this->buildModifyColumnDefinition($r, $existing, $type);
+        $ddl = [sprintf(
+            'ALTER TABLE %s MODIFY COLUMN %s %s',
+            $this->ident($table),
+            $this->ident($r->name),
+            $columnSql,
+        )];
+
+        $requiredOption = $r->option('required');
+        $required = is_bool($requiredOption) ? $requiredOption : (bool) $existing->required;
+
+        return new ChangePlan(
+            request: $r,
+            table: $table,
+            ddl: $ddl,
+            metadataAttributes: [
+                'type' => $type,
+                'required' => $required,
+                'default_value' => $this->stringOption($r, 'default') ?? $existing->default_value,
+                'help' => $this->stringOption($r, 'help') ?? $existing->help,
+                'comments' => $this->stringOption($r, 'comments') ?? $existing->comments,
+                'max_length' => $this->nullableIntOption($r, 'length') ?? $existing->max_length,
+                'precision' => $this->nullableIntOption($r, 'precision') ?? $existing->precision,
+                'scale' => $this->nullableIntOption($r, 'scale') ?? $existing->scale,
+                'option_list_id' => $this->stringOption($r, 'option_list_id') ?? $existing->option_list_id,
+                'related_module_id' => $this->stringOption($r, 'related_module_id') ?? $existing->related_module_id,
+                'related_display_field' => $this->stringOption($r, 'related_display_field') ?? $existing->related_display_field,
+                'filterable' => $this->contract->filterable($type),
+                'sortable' => $this->contract->sortable($type),
             ],
         );
     }
@@ -261,12 +409,19 @@ final class SchemaManager
                         return Field::create($plan->metadataAttributes);
                     }
 
-                    // delete: soft-delete the metadata row, keep the column (BACKEND_BRIEF §6.5).
                     $module = Module::query()->where('key', $plan->request->moduleKey)->firstOrFail();
                     $field = Field::query()
                         ->where('module_id', $module->id)
                         ->where('name', $plan->request->name)
                         ->firstOrFail();
+
+                    if ($plan->request->action === 'modify') {
+                        $field->update($plan->metadataAttributes);
+
+                        return $field;
+                    }
+
+                    // delete: soft-delete the metadata row, keep the column (BACKEND_BRIEF §6.5).
                     $field->delete();
 
                     return $field;
@@ -380,6 +535,33 @@ final class SchemaManager
         }
 
         $required = (bool) $r->option('required', false);
+        $nullability = $type === 'bool' ? 'NOT NULL DEFAULT 0' : ($required ? 'NOT NULL' : 'NULL');
+
+        return "{$column} {$nullability}";
+    }
+
+    /**
+     * Same shape as buildColumnDefinition(), but for 'modify' — length/precision/scale/
+     * required fall back to the existing Field's stored values, not the contract default,
+     * since an unspecified option means "leave this parameter as it is".
+     */
+    private function buildModifyColumnDefinition(FieldChangeRequest $r, Field $existing, string $type): string
+    {
+        $column = $this->contract->column($type);
+
+        if (str_contains($column, ':length')) {
+            $length = $this->intOption($r, 'length', $existing->max_length ?? $this->contract->lengthDefault($type));
+            $column = str_replace(':length', (string) $length, $column);
+        }
+
+        if (str_contains($column, ':precision') || str_contains($column, ':scale')) {
+            $precision = $this->intOption($r, 'precision', $existing->precision ?? $this->contract->precisionDefault($type));
+            $scale = $this->intOption($r, 'scale', $existing->scale ?? $this->contract->scaleDefault($type));
+            $column = str_replace([':precision', ':scale'], [(string) $precision, (string) $scale], $column);
+        }
+
+        $requiredOption = $r->option('required');
+        $required = is_bool($requiredOption) ? $requiredOption : (bool) $existing->required;
         $nullability = $type === 'bool' ? 'NOT NULL DEFAULT 0' : ($required ? 'NOT NULL' : 'NULL');
 
         return "{$column} {$nullability}";
