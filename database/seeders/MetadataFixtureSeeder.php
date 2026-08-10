@@ -12,12 +12,13 @@ use App\Models\Metadata\OptionList;
 use Illuminate\Database\Seeder;
 
 /**
- * Registers the three Z-2.4 entities (Company, Lead, Assessment) in the
- * metadata registry, matching their real migrated columns — this is what
- * lets the frontend's DynamicResource render them, and what Studio extends
- * later. Leads carries the full frozen layout contract fixture from Z-1.5;
- * Company and Assessment register fields only for now (their layouts land
- * with the frontend lane's screens). Idempotent.
+ * Registers the Z-2.4/Z-2.5 entities (Company, Lead, Assessment, Student,
+ * Client, Affiliate, NewsletterSubscriber) in the metadata registry, matching
+ * their real migrated columns — this is what lets the frontend's
+ * DynamicResource render them, and what Studio extends later. Leads carries
+ * the full frozen layout contract fixture from Z-1.5; the rest register
+ * fields only for now (their layouts land with the frontend lane's screens).
+ * Idempotent.
  */
 class MetadataFixtureSeeder extends Seeder
 {
@@ -37,6 +38,10 @@ class MetadataFixtureSeeder extends Seeder
         $this->seedLeads($vertical, $stage);
         $this->seedCompanies();
         $this->seedAssessments();
+        $this->seedStudents();
+        $this->seedClients();
+        $this->seedAffiliates();
+        $this->seedNewsletterSubscribers();
     }
 
     private function seedLeads(OptionList $vertical, OptionList $stage): void
@@ -98,6 +103,64 @@ class MetadataFixtureSeeder extends Seeder
         $this->field($assessments, 'status', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 20]);
         $this->field($assessments, 'crs_score', 'int', ['filterable' => true, 'sortable' => true]);
         $this->field($assessments, 'fsw_score', 'int', ['filterable' => true, 'sortable' => true]);
+    }
+
+    private function seedStudents(): void
+    {
+        $students = Module::updateOrCreate(
+            ['key' => 'students'],
+            ['label' => 'Students', 'table_name' => 'students', 'base_type' => 'person', 'enabled' => true],
+        );
+
+        $this->field($students, 'full_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        $this->field($students, 'primary_email', 'email', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        $this->field($students, 'phone_mobile', 'phone', ['filterable' => true, 'max_length' => 50]);
+        $this->field($students, 'status', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 60]);
+        $this->field($students, 'get_started', 'text', ['filterable' => true, 'max_length' => 255]);
+        $this->field($students, 'hot_lead', 'bool', ['filterable' => true]);
+        $this->field($students, 'warm_lead', 'bool', ['filterable' => true]);
+    }
+
+    private function seedClients(): void
+    {
+        $clients = Module::updateOrCreate(
+            ['key' => 'clients'],
+            ['label' => 'Clients', 'table_name' => 'clients', 'base_type' => 'person', 'enabled' => true],
+        );
+
+        $this->field($clients, 'full_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        $this->field($clients, 'primary_email', 'email', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        $this->field($clients, 'client_status', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 60]);
+        $this->field($clients, 'case_type', 'text', ['filterable' => true, 'max_length' => 60]);
+        $this->field($clients, 'fee_status', 'text', ['filterable' => true, 'max_length' => 30]);
+        $this->field($clients, 'next_action_at', 'datetime', ['filterable' => true, 'sortable' => true]);
+    }
+
+    private function seedAffiliates(): void
+    {
+        $affiliates = Module::updateOrCreate(
+            ['key' => 'affiliates'],
+            ['label' => 'Affiliates', 'table_name' => 'affiliates', 'base_type' => 'person', 'enabled' => true],
+        );
+
+        $this->field($affiliates, 'full_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        $this->field($affiliates, 'primary_email', 'email', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        $this->field($affiliates, 'username', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        $this->field($affiliates, 'commission', 'decimal', ['filterable' => true, 'sortable' => true]);
+        $this->field($affiliates, 'status', 'text', ['filterable' => true, 'max_length' => 30]);
+    }
+
+    private function seedNewsletterSubscribers(): void
+    {
+        $subscribers = Module::updateOrCreate(
+            ['key' => 'newsletter_subscribers'],
+            ['label' => 'Newsletter subscribers', 'table_name' => 'newsletter_subscribers', 'base_type' => 'person', 'enabled' => true],
+        );
+
+        $this->field($subscribers, 'full_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        $this->field($subscribers, 'primary_email', 'email', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        $this->field($subscribers, 'status', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 30]);
+        $this->field($subscribers, 'source', 'text', ['filterable' => true, 'max_length' => 255]);
     }
 
     /**
