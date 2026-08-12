@@ -75,10 +75,16 @@ class AppServiceProvider extends ServiceProvider
         Module::created(fn (Module $module) => $this->app->make(Acl::class)->registerModule($module->key));
         Role::created(fn (Role $role) => $this->app->make(Acl::class)->registerRole($role->id));
 
-        // Build the SMTP mailer from the settings store, never .env (Z-4.1). Guarded —
-        // the settings table/columns do not exist yet while running `migrate` itself.
-        if (Schema::hasTable('settings') && Schema::hasColumn('settings', 'is_secret')) {
-            $this->app->make(RuntimeMailConfigurator::class)->apply();
+        // Build the SMTP mailer from the settings store, never .env (Z-4.1). No database
+        // may be reachable yet at this boot (composer's package:discover, a fresh install
+        // before the first migrate) — fall back to config/mail.php as shipped rather than
+        // fail the entire boot over a mailer nicety.
+        try {
+            if (Schema::hasTable('settings') && Schema::hasColumn('settings', 'is_secret')) {
+                $this->app->make(RuntimeMailConfigurator::class)->apply();
+            }
+        } catch (\Throwable) {
+            // Intentionally swallowed — see comment above.
         }
     }
 }
