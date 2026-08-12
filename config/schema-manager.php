@@ -13,4 +13,7 @@ return [
 
     // Default per-module custom-field ceiling (BACKEND_BRIEF §6.3).
     'max_custom_fields_per_module' => (int) env('SCHEMA_MANAGER_MAX_FIELDS', 150),
+
+    // Installation-wide custom-field ceiling, across every module (Z-3.3).
+    'max_custom_fields_total' => (int) env('SCHEMA_MANAGER_MAX_FIELDS_TOTAL', 1000),
 ];

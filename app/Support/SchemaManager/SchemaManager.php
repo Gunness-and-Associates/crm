@@ -22,6 +22,16 @@ use Illuminate\Support\Facades\Schema;
  */
 final class SchemaManager
 {
+    /**
+     * The Field attribute keys a 'modify' can touch — captured as the change log's
+     * "before" state, and what rollback() restores for a rolled-back modify.
+     */
+    private const MODIFIABLE_ATTRIBUTE_KEYS = [
+        'type', 'required', 'default_value', 'help', 'comments', 'max_length',
+        'precision', 'scale', 'option_list_id', 'related_module_id',
+        'related_display_field', 'filterable', 'sortable',
+    ];
+
     public function __construct(
         private readonly FieldTypeContract $contract,
         private readonly Snapshotter $snapshotter,
@@ -73,6 +83,12 @@ final class SchemaManager
             $max = $this->configInt('schema-manager.max_custom_fields_per_module', 150);
             if ($count >= $max) {
                 $errors[] = "Module [{$r->moduleKey}] has reached its field ceiling of {$max}.";
+            }
+
+            $total = Field::query()->where('is_custom', true)->count();
+            $totalMax = $this->configInt('schema-manager.max_custom_fields_total', 1000);
+            if ($total >= $totalMax) {
+                $errors[] = "This installation has reached its custom field ceiling of {$totalMax}.";
             }
 
             $errors = [...$errors, ...$this->validateType($r)];
@@ -404,7 +420,8 @@ final class SchemaManager
                     DB::statement($statement);
                 }
 
-                $field = DB::transaction(function () use ($plan) {
+                $before = null;
+                $field = DB::transaction(function () use ($plan, &$before) {
                     if ($plan->request->action === 'add') {
                         return Field::create($plan->metadataAttributes);
                     }
@@ -414,6 +431,8 @@ final class SchemaManager
                         ->where('module_id', $module->id)
                         ->where('name', $plan->request->name)
                         ->firstOrFail();
+
+                    $before = $field->only(self::MODIFIABLE_ATTRIBUTE_KEYS);
 
                     if ($plan->request->action === 'modify') {
                         $field->update($plan->metadataAttributes);
@@ -432,7 +451,10 @@ final class SchemaManager
                     'kind' => "field.{$plan->request->action}",
                     'target_module' => $plan->request->moduleKey,
                     'target_field' => $plan->request->name,
-                    'payload' => $plan->metadataAttributes,
+                    'payload' => [
+                        'before' => $before,
+                        'after' => $plan->request->action === 'delete' ? null : $plan->metadataAttributes,
+                    ],
                     'status' => 'applied',
                     'ddl' => implode("\n", $executed),
                     'snapshot_path' => $snapshotPath,
@@ -477,13 +499,7 @@ final class SchemaManager
             $this->snapshotter->restore($change->snapshot_path);
 
             if ($change->target_module !== null && $change->target_field !== null) {
-                $module = Module::query()->where('key', $change->target_module)->first();
-                if ($module !== null) {
-                    Field::query()->withTrashed()
-                        ->where('module_id', $module->id)
-                        ->where('name', $change->target_field)
-                        ->each(fn (Field $f) => $f->forceDelete());
-                }
+                $this->rollbackFieldMetadata($change);
             }
 
             $change->update(['status' => 'rolled_back', 'reviewer_id' => $actorId]);
@@ -493,6 +509,58 @@ final class SchemaManager
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * A rolled-back 'field.add' never should have existed — force-delete the metadata
+     * row entirely. A rolled-back 'field.modify' should return to its prior attributes,
+     * not disappear — restore them from the change log's "before" state.
+     */
+    private function rollbackFieldMetadata(Change $change): void
+    {
+        $module = Module::query()->where('key', $change->target_module)->first();
+        if ($module === null) {
+            return;
+        }
+
+        $field = Field::query()->withTrashed()
+            ->where('module_id', $module->id)
+            ->where('name', $change->target_field)
+            ->first();
+
+        if ($field === null) {
+            return;
+        }
+
+        if ($change->kind === 'field.add') {
+            $field->forceDelete();
+
+            return;
+        }
+
+        if ($change->kind === 'field.modify') {
+            $payload = $change->payload;
+            $before = is_array($payload) ? ($payload['before'] ?? null) : null;
+            if (is_array($before)) {
+                $field->update($this->stringKeyedArray($before));
+            }
+        }
+    }
+
+    /**
+     * @param  array<mixed, mixed>  $array
+     * @return array<string, mixed>
+     */
+    private function stringKeyedArray(array $array): array
+    {
+        $result = [];
+        foreach ($array as $key => $value) {
+            if (is_string($key)) {
+                $result[$key] = $value;
+            }
+        }
+
+        return $result;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\Metadata\Change;
 use App\Models\Metadata\Layout;
 use App\Models\Metadata\Module;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +23,7 @@ final class LayoutManager
     /**
      * @param  array<string, mixed>  $definition
      */
-    public function draft(string $moduleKey, string $view, array $definition): Layout
+    public function draft(string $moduleKey, string $view, array $definition, ?string $actorId = null): Layout
     {
         $module = $this->findModule($moduleKey);
         $errors = $this->validateDefinition($module, $moduleKey, $view, $definition);
@@ -46,12 +47,22 @@ final class LayoutManager
             'is_published' => false,
         ]);
 
+        Change::create([
+            'actor_id' => $actorId,
+            'kind' => 'layout.drafted',
+            'target_module' => $moduleKey,
+            'target_field' => $view,
+            'payload' => ['before' => null, 'after' => ['layout_id' => $layout->id, 'version' => $nextVersion, 'definition' => $definition]],
+            'status' => 'applied',
+            'applied_at' => now(),
+        ]);
+
         $this->repository->bump();
 
         return $layout;
     }
 
-    public function publish(string $layoutId): Layout
+    public function publish(string $layoutId, ?string $actorId = null): Layout
     {
         $layout = Layout::query()->findOrFail($layoutId);
 
@@ -59,6 +70,12 @@ final class LayoutManager
         if ($errors !== []) {
             throw new MetadataValidationException($errors);
         }
+
+        $previous = Layout::query()
+            ->where('module_id', $layout->module_id)
+            ->where('view', $layout->view)
+            ->where('is_published', true)
+            ->first();
 
         DB::transaction(function () use ($layout): void {
             Layout::query()
@@ -70,15 +87,29 @@ final class LayoutManager
             $layout->update(['is_published' => true]);
         });
 
+        Change::create([
+            'actor_id' => $actorId,
+            'kind' => 'layout.published',
+            'target_module' => $layout->module?->key,
+            'target_field' => $layout->view,
+            'payload' => [
+                'before' => $previous === null ? null : ['layout_id' => $previous->id, 'version' => $previous->version],
+                'after' => ['layout_id' => $layout->id, 'version' => $layout->version],
+            ],
+            'status' => 'applied',
+            'applied_at' => now(),
+        ]);
+
         $this->repository->bump();
 
         return $layout->refresh();
     }
 
     /**
-     * Draft a new version from an old version's definition, then publish it.
+     * Draft a new version from an old version's definition, then publish it. Never
+     * rewrites history — a "revert" is itself a new, fully audited version.
      */
-    public function revert(string $moduleKey, string $view, int $toVersion): Layout
+    public function revert(string $moduleKey, string $view, int $toVersion, ?string $actorId = null): Layout
     {
         $module = $this->findModule($moduleKey);
         if ($module === null) {
@@ -95,9 +126,9 @@ final class LayoutManager
             throw new MetadataValidationException(["No version [{$toVersion}] of the [{$view}] layout for [{$moduleKey}]."]);
         }
 
-        $draft = $this->draft($moduleKey, $view, $old->definition);
+        $draft = $this->draft($moduleKey, $view, $old->definition, $actorId);
 
-        return $this->publish($draft->id);
+        return $this->publish($draft->id, $actorId);
     }
 
     private function findModule(string $moduleKey): ?Module

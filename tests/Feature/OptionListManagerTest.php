@@ -1,9 +1,11 @@
 <?php
 
+use App\Models\Metadata\Change;
 use App\Models\Metadata\Field;
 use App\Models\Metadata\Module;
 use App\Models\Metadata\OptionItem;
 use App\Models\Metadata\OptionList;
+use App\Models\User;
 use App\Support\MetadataValidationException;
 use App\Support\OptionListManager;
 use Illuminate\Database\Schema\Blueprint;
@@ -138,4 +140,32 @@ it('rejects reordering with a value set that does not match', function () {
 
     expect(fn () => $manager->reorderItems($list->key, ['gold']))
         ->toThrow(MetadataValidationException::class);
+});
+
+it('records the actor and before/after state on the change log for add, remove and reorder', function () {
+    $list = OptionList::factory()->create();
+    $actor = User::factory()->create();
+    $manager = app(OptionListManager::class);
+
+    $manager->addItem($list->key, 'gold', 'Gold', actorId: $actor->id);
+    $addChange = Change::query()->where('kind', 'option.added')->latest()->first();
+
+    expect($addChange->actor_id)->toBe($actor->id)
+        ->and($addChange->payload['before'])->toBeNull()
+        ->and($addChange->payload['after']['value'])->toBe('gold');
+
+    OptionItem::factory()->create(['option_list_id' => $list->id, 'value' => 'silver', 'sort_order' => 1]);
+    $manager->reorderItems($list->key, ['silver', 'gold'], actorId: $actor->id);
+    $reorderChange = Change::query()->where('kind', 'option.reordered')->latest()->first();
+
+    expect($reorderChange->actor_id)->toBe($actor->id)
+        ->and($reorderChange->payload['before'])->toBe(['gold', 'silver'])
+        ->and($reorderChange->payload['after'])->toBe(['silver', 'gold']);
+
+    $manager->removeItem($list->key, 'gold', actorId: $actor->id);
+    $removeChange = Change::query()->where('kind', 'option.removed')->latest()->first();
+
+    expect($removeChange->actor_id)->toBe($actor->id)
+        ->and($removeChange->payload['after'])->toBeNull()
+        ->and($removeChange->payload['before']['value'])->toBe('gold');
 });
