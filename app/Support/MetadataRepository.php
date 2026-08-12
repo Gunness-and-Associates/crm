@@ -7,6 +7,7 @@ use App\Models\Metadata\Layout;
 use App\Models\Metadata\Module;
 use App\Models\Metadata\OptionItem;
 use App\Models\Metadata\OptionList;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -49,7 +50,9 @@ final class MetadataRepository
      */
     private function compile(): array
     {
-        $modules = Module::query()->with(['fields', 'layouts'])->get()
+        $modules = Module::query()
+            ->with(['fields', 'layouts' => fn (Relation $query): Relation => $query->where('is_published', true)])
+            ->get()
             ->keyBy('key')
             ->map(fn (Module $m): array => [
                 'key' => $m->key,

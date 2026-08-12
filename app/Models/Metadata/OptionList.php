@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $id
  * @property string $key
  * @property string $label
+ * @property bool $is_system
  */
 class OptionList extends Model
 {
@@ -21,7 +22,13 @@ class OptionList extends Model
     use HasUuids;
 
     /** @var list<string> */
-    protected $fillable = ['key', 'label'];
+    protected $fillable = ['key', 'label', 'is_system'];
+
+    /** @return array<string, string> */
+    protected function casts(): array
+    {
+        return ['is_system' => 'boolean'];
+    }
 
     /** @return HasMany<OptionItem, $this> */
     public function items(): HasMany
