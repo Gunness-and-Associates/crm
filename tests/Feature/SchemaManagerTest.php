@@ -7,7 +7,9 @@ use App\Support\SchemaManager\FieldChangeRequest;
 use App\Support\SchemaManager\SchemaManager;
 use App\Support\SchemaManager\SchemaValidationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 uses(RefreshDatabase::class);
 
@@ -147,4 +149,98 @@ it('createSidecar is idempotent', function () {
     $manager->createSidecar('some_table'); // no error on repeat
 
     expect(Schema::hasTable('some_table_custom'))->toBeTrue();
+});
+
+it('widens a text field length safely without requiring confirmation', function () {
+    $module = leadsModule();
+    $manager = app(SchemaManager::class);
+
+    $manager->apply(
+        $manager->plan(new FieldChangeRequest('add', $module->key, 'zwiden_text', 'text', ['length' => 100])),
+        actorId: null,
+    );
+
+    $plan = $manager->plan(new FieldChangeRequest('modify', $module->key, 'zwiden_text', 'text', ['length' => 300]));
+    $result = $manager->apply($plan, actorId: null);
+
+    expect($result->success)->toBeTrue()
+        ->and(implode(' ', $plan->ddl))->toContain('MODIFY COLUMN')->toContain('varchar(300)')
+        ->and(Field::query()->where('module_id', $module->id)->where('name', 'zwiden_text')->first()->max_length)->toBe(300);
+});
+
+it('requires confirm_lossy to narrow a text field length', function () {
+    $module = leadsModule();
+    $manager = app(SchemaManager::class);
+
+    $manager->apply(
+        $manager->plan(new FieldChangeRequest('add', $module->key, 'zshrink_gate', 'text', ['length' => 300])),
+        actorId: null,
+    );
+
+    expect(fn () => $manager->plan(new FieldChangeRequest('modify', $module->key, 'zshrink_gate', 'text', ['length' => 50])))
+        ->toThrow(SchemaValidationException::class);
+});
+
+it('narrows a text field length and snapshots when confirm_lossy is given', function () {
+    $module = leadsModule();
+    $manager = app(SchemaManager::class);
+
+    $manager->apply(
+        $manager->plan(new FieldChangeRequest('add', $module->key, 'zshrink_ok', 'text', ['length' => 300])),
+        actorId: null,
+    );
+
+    $plan = $manager->plan(new FieldChangeRequest(
+        'modify', $module->key, 'zshrink_ok', 'text', ['length' => 50], confirmLossy: true,
+    ));
+    $result = $manager->apply($plan, actorId: null);
+
+    expect($result->success)->toBeTrue()
+        ->and($result->snapshotPath)->not->toBeNull()
+        ->and(Field::query()->where('module_id', $module->id)->where('name', 'zshrink_ok')->first()->max_length)->toBe(50);
+});
+
+it("blocks changing a relate field's related module while data exists", function () {
+    $module = leadsModule();
+    $relatedA = Module::factory()->create(['key' => 'related_a', 'table_name' => 'related_a']);
+    $relatedB = Module::factory()->create(['key' => 'related_b', 'table_name' => 'related_b']);
+    $manager = app(SchemaManager::class);
+
+    $manager->apply(
+        $manager->plan(new FieldChangeRequest('add', $module->key, 'zlinked_blocked', 'relate', [
+            'related_module_id' => $relatedA->id,
+            'related_display_field' => 'name',
+        ])),
+        actorId: null,
+    );
+
+    DB::table('leads_sm_test_custom')->insert([
+        'id' => (string) Str::uuid(),
+        'zlinked_blocked' => (string) Str::uuid(),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    expect(fn () => $manager->plan(new FieldChangeRequest('modify', $module->key, 'zlinked_blocked', 'relate', [
+        'related_module_id' => $relatedB->id,
+        'related_display_field' => 'name',
+    ])))->toThrow(SchemaValidationException::class);
+});
+
+it('adds a real index for an indexable field type on add', function () {
+    $module = leadsModule();
+    $related = Module::factory()->create(['key' => 'related_c', 'table_name' => 'related_c']);
+    $manager = app(SchemaManager::class);
+
+    $plan = $manager->plan(new FieldChangeRequest('add', $module->key, 'zlinked_indexed', 'relate', [
+        'related_module_id' => $related->id,
+        'related_display_field' => 'name',
+    ]));
+    $manager->apply($plan, actorId: null);
+
+    $hasIndexOnLinked = collect(Schema::getIndexes('leads_sm_test_custom'))
+        ->contains(fn (array $index): bool => in_array('zlinked_indexed', $index['columns'], true));
+
+    expect(implode(' ', $plan->ddl))->toContain('ADD INDEX')
+        ->and($hasIndexOnLinked)->toBeTrue();
 });

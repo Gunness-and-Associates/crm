@@ -89,6 +89,11 @@ final class FieldTypeContract
         return (bool) ($this->type($type)['sortable'] ?? false);
     }
 
+    public function indexable(string $type): bool
+    {
+        return (bool) ($this->type($type)['indexable'] ?? false);
+    }
+
     public function lengthDefault(string $type): int
     {
         return $this->int($this->arr($this->type($type)['length'] ?? null)['default'] ?? null, 255);
