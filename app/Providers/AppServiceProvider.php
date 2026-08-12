@@ -13,9 +13,11 @@ use App\Support\ActivityBlueprintMacro;
 use App\Support\ContactableBlueprintMacro;
 use App\Support\Livewire\SubdirectoryHandleRequests;
 use App\Support\MetadataRepository;
+use App\Support\RuntimeMailConfigurator;
 use App\Support\SchemaManager\SchemaManager;
 use App\Support\SchemaManager\Snapshotter;
 use App\Support\Settings;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Livewire\Mechanisms\HandleRequests\HandleRequests;
@@ -72,5 +74,11 @@ class AppServiceProvider extends ServiceProvider
         // new capability is never granted implicitly.
         Module::created(fn (Module $module) => $this->app->make(Acl::class)->registerModule($module->key));
         Role::created(fn (Role $role) => $this->app->make(Acl::class)->registerRole($role->id));
+
+        // Build the SMTP mailer from the settings store, never .env (Z-4.1). Guarded —
+        // the settings table/columns do not exist yet while running `migrate` itself.
+        if (Schema::hasTable('settings') && Schema::hasColumn('settings', 'is_secret')) {
+            $this->app->make(RuntimeMailConfigurator::class)->apply();
+        }
     }
 }
