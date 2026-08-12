@@ -24,7 +24,7 @@ final class OptionListManager
         private readonly MetadataRepository $repository,
     ) {}
 
-    public function addItem(string $listKey, string $value, string $label, ?int $sortOrder = null): OptionItem
+    public function addItem(string $listKey, string $value, string $label, ?int $sortOrder = null, ?string $actorId = null): OptionItem
     {
         $list = $this->findList($listKey);
         $errors = $this->guardEditable($list);
@@ -45,12 +45,22 @@ final class OptionListManager
             'sort_order' => $sortOrder ?? ($this->maxSortOrder($list) + 1),
         ]);
 
+        Change::create([
+            'actor_id' => $actorId,
+            'kind' => 'option.added',
+            'target_module' => $listKey,
+            'target_field' => $value,
+            'payload' => ['before' => null, 'after' => $item->only(['value', 'label', 'sort_order'])],
+            'status' => 'applied',
+            'applied_at' => now(),
+        ]);
+
         $this->repository->bump();
 
         return $item;
     }
 
-    public function removeItem(string $listKey, string $value, bool $confirmLossy = false): void
+    public function removeItem(string $listKey, string $value, bool $confirmLossy = false, ?string $actorId = null): void
     {
         $list = $this->findList($listKey);
         $errors = $this->guardEditable($list);
@@ -84,13 +94,17 @@ final class OptionListManager
         }
 
         try {
+            $before = $item->only(['value', 'label', 'sort_order']);
             $snapshotPath = $tables !== [] ? $this->snapshotter->snapshot($tables) : null;
 
             $item->delete();
 
             Change::create([
+                'actor_id' => $actorId,
                 'kind' => 'option.removed',
-                'payload' => ['option_list' => $listKey, 'value' => $value, 'affected_tables' => $tables],
+                'target_module' => $listKey,
+                'target_field' => $value,
+                'payload' => ['before' => $before, 'after' => null, 'affected_tables' => $tables],
                 'status' => 'applied',
                 'snapshot_path' => $snapshotPath,
                 'applied_at' => now(),
@@ -105,7 +119,7 @@ final class OptionListManager
     /**
      * @param  list<string>  $orderedValues  every value currently on the list, in the new order
      */
-    public function reorderItems(string $listKey, array $orderedValues): void
+    public function reorderItems(string $listKey, array $orderedValues, ?string $actorId = null): void
     {
         $list = $this->findList($listKey);
         $errors = $this->guardEditable($list);
@@ -121,9 +135,20 @@ final class OptionListManager
             throw new MetadataValidationException(["The given values do not match the current items on list [{$listKey}] exactly."]);
         }
 
+        $before = $existing->sortBy('sort_order')->keys()->values()->all();
+
         foreach ($orderedValues as $index => $value) {
             $existing->get($value)?->update(['sort_order' => $index]);
         }
+
+        Change::create([
+            'actor_id' => $actorId,
+            'kind' => 'option.reordered',
+            'target_module' => $listKey,
+            'payload' => ['before' => $before, 'after' => $orderedValues],
+            'status' => 'applied',
+            'applied_at' => now(),
+        ]);
 
         $this->repository->bump();
     }

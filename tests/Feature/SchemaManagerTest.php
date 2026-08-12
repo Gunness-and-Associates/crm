@@ -1,7 +1,9 @@
 <?php
 
+use App\Models\Metadata\Change;
 use App\Models\Metadata\Field;
 use App\Models\Metadata\Module;
+use App\Models\User;
 use App\Support\SchemaManager\ChangeResult;
 use App\Support\SchemaManager\FieldChangeRequest;
 use App\Support\SchemaManager\SchemaManager;
@@ -243,4 +245,88 @@ it('adds a real index for an indexable field type on add', function () {
 
     expect(implode(' ', $plan->ddl))->toContain('ADD INDEX')
         ->and($hasIndexOnLinked)->toBeTrue();
+});
+
+it('records before/after on the change log for add and modify', function () {
+    $module = leadsModule();
+    $manager = app(SchemaManager::class);
+
+    $addPlan = $manager->plan(new FieldChangeRequest('add', $module->key, 'zchangelog', 'text', ['length' => 100]));
+    $addResult = $manager->apply($addPlan, actorId: null);
+    $addChange = Change::query()->findOrFail($addResult->changeId);
+
+    expect($addChange->payload['before'])->toBeNull()
+        ->and($addChange->payload['after']['max_length'])->toBe(100);
+
+    $modifyPlan = $manager->plan(new FieldChangeRequest('modify', $module->key, 'zchangelog', 'text', ['length' => 200]));
+    $modifyResult = $manager->apply($modifyPlan, actorId: null);
+    $modifyChange = Change::query()->findOrFail($modifyResult->changeId);
+
+    expect($modifyChange->payload['before']['max_length'])->toBe(100)
+        ->and($modifyChange->payload['after']['max_length'])->toBe(200);
+});
+
+it('rollback of an add removes only that field, leaving the sidecar table and sibling columns intact', function () {
+    $module = leadsModule();
+    $manager = app(SchemaManager::class);
+    $actor = User::factory()->create();
+
+    // First add creates the sidecar table — no snapshot is possible for it (nothing to
+    // protect yet). The second add runs against an already-existing table, so it does
+    // get snapshotted, and is the one this test rolls back.
+    $manager->apply(
+        $manager->plan(new FieldChangeRequest('add', $module->key, 'zrollback_sibling', 'text', ['length' => 100])),
+        actorId: null,
+    );
+    $plan = $manager->plan(new FieldChangeRequest('add', $module->key, 'zrollback_add', 'text', ['length' => 100]));
+    $result = $manager->apply($plan, actorId: null);
+
+    $manager->rollback($result->changeId, actorId: $actor->id);
+
+    expect(Field::withTrashed()->where('module_id', $module->id)->where('name', 'zrollback_add')->exists())->toBeFalse()
+        ->and(Schema::hasColumn('leads_sm_test_custom', 'zrollback_add'))->toBeFalse()
+        ->and(Schema::hasColumn('leads_sm_test_custom', 'zrollback_sibling'))->toBeTrue()
+        ->and(Change::query()->findOrFail($result->changeId)->status)->toBe('rolled_back');
+});
+
+it('rollback of a modify restores the previous field attributes, not just the column', function () {
+    $module = leadsModule();
+    $manager = app(SchemaManager::class);
+    $actor = User::factory()->create();
+
+    // A prior add ensures the sidecar table already exists, so the modify below gets a
+    // real snapshot to roll back to.
+    $manager->apply(
+        $manager->plan(new FieldChangeRequest('add', $module->key, 'zrollback_seed', 'text', ['length' => 100])),
+        actorId: null,
+    );
+    $manager->apply(
+        $manager->plan(new FieldChangeRequest('add', $module->key, 'zrollback_modify', 'text', ['length' => 100])),
+        actorId: null,
+    );
+
+    $modifyPlan = $manager->plan(new FieldChangeRequest('modify', $module->key, 'zrollback_modify', 'text', ['length' => 300]));
+    $modifyResult = $manager->apply($modifyPlan, actorId: null);
+
+    $manager->rollback($modifyResult->changeId, actorId: $actor->id);
+
+    $field = Field::query()->where('module_id', $module->id)->where('name', 'zrollback_modify')->first();
+
+    expect($field)->not->toBeNull()
+        ->and($field->max_length)->toBe(100)
+        ->and(Schema::getColumnType('leads_sm_test_custom', 'zrollback_modify'))->toBe('varchar');
+});
+
+it('rejects an add once the installation-wide custom field ceiling is reached', function () {
+    config(['schema-manager.max_custom_fields_total' => 1]);
+    $module = leadsModule();
+    $manager = app(SchemaManager::class);
+
+    $manager->apply(
+        $manager->plan(new FieldChangeRequest('add', $module->key, 'zceiling_one', 'text')),
+        actorId: null,
+    );
+
+    expect(fn () => $manager->plan(new FieldChangeRequest('add', $module->key, 'zceiling_two', 'text')))
+        ->toThrow(SchemaValidationException::class);
 });

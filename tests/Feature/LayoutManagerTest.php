@@ -1,7 +1,9 @@
 <?php
 
+use App\Models\Metadata\Change;
 use App\Models\Metadata\Layout;
 use App\Models\Metadata\Module;
+use App\Models\User;
 use App\Support\LayoutManager;
 use App\Support\MetadataRepository;
 use App\Support\MetadataValidationException;
@@ -108,4 +110,31 @@ it('serves only the published layout through the compiled metadata repository', 
     $compiled = $repository->compiled();
 
     expect($compiled['modules']['lm_test']['layouts']['list'])->toEqual($v1->definition);
+});
+
+it('records the actor and before/after state on the change log for draft and publish', function () {
+    $module = layoutModule();
+    $actor = User::factory()->create();
+    $manager = app(LayoutManager::class);
+
+    $v1 = $manager->draft($module->key, 'list', layoutDefinition(), actorId: $actor->id);
+    $draftChange = Change::query()->where('kind', 'layout.drafted')->latest()->first();
+
+    expect($draftChange->actor_id)->toBe($actor->id)
+        ->and($draftChange->payload['before'])->toBeNull()
+        ->and($draftChange->payload['after']['layout_id'])->toBe($v1->id);
+
+    $manager->publish($v1->id, actorId: $actor->id);
+    $firstPublish = Change::query()->where('kind', 'layout.published')->latest()->first();
+
+    expect($firstPublish->actor_id)->toBe($actor->id)
+        ->and($firstPublish->payload['before'])->toBeNull()
+        ->and($firstPublish->payload['after']['layout_id'])->toBe($v1->id);
+
+    $v2 = $manager->draft($module->key, 'list', layoutDefinition(), actorId: $actor->id);
+    $manager->publish($v2->id, actorId: $actor->id);
+    $secondPublish = Change::query()->where('kind', 'layout.published')->where('id', '!=', $firstPublish->id)->first();
+
+    expect($secondPublish->payload['before']['layout_id'])->toBe($v1->id)
+        ->and($secondPublish->payload['after']['layout_id'])->toBe($v2->id);
 });
