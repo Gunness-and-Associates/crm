@@ -34,3 +34,32 @@ it('persists to the settings table', function () {
     app(Settings::class)->set('x', 1);
     expect(Setting::query()->where('key', 'x')->exists())->toBeTrue();
 });
+
+it('encrypts a secret value at rest and decrypts it back through get()', function () {
+    $settings = app(Settings::class);
+    $settings->set('mail.password', 'super-secret', secret: true);
+
+    $raw = Setting::query()->where('key', 'mail.password')->first();
+
+    expect($raw->is_secret)->toBeTrue()
+        ->and($raw->value)->not->toContain('super-secret')
+        ->and($settings->get('mail.password'))->toBe('super-secret');
+});
+
+it('decrypts a secret value again after the cache is flushed', function () {
+    $settings = app(Settings::class);
+    $settings->set('mail.password', 'super-secret', secret: true);
+    $settings->flush();
+
+    expect($settings->get('mail.password'))->toBe('super-secret');
+});
+
+it('stores a non-secret value in plain json, unaffected by the secret flag', function () {
+    $settings = app(Settings::class);
+    $settings->set('company.name', 'Gunness & Associates');
+
+    $raw = Setting::query()->where('key', 'company.name')->first();
+
+    expect($raw->is_secret)->toBeFalse()
+        ->and($raw->value)->toBe('"Gunness & Associates"');
+});

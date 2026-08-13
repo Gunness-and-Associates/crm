@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Setting;
+use Illuminate\Support\Facades\Crypt;
 
 /**
  * Per-company configuration store — tenancy-ready rule 3.
@@ -10,7 +11,9 @@ use App\Models\Setting;
  * SMTP, telephony, branding, business hours and enabled modules live here,
  * never in `.env`. Values are JSON-encoded in the `settings` table on the
  * current default connection (which becomes the tenant database at Phase 8)
- * and are cached as one compiled map.
+ * and are cached as one compiled map. A value stored with $secret=true
+ * (SMTP password, an integration API key) is additionally encrypted with the
+ * app key before it ever reaches the database.
  */
 final class Settings
 {
@@ -39,10 +42,15 @@ final class Settings
         $values = cache()->remember(Keys::cache(self::CACHE_KEY), self::CACHE_TTL, static function (): array {
             $out = [];
 
-            foreach (Setting::all(['key', 'value']) as $setting) {
-                $out[$setting->key] = $setting->value === null
-                    ? null
-                    : json_decode($setting->value, true);
+            foreach (Setting::all(['key', 'value', 'is_secret']) as $setting) {
+                if ($setting->value === null) {
+                    $out[$setting->key] = null;
+
+                    continue;
+                }
+
+                $raw = $setting->is_secret ? Crypt::decryptString($setting->value) : $setting->value;
+                $out[$setting->key] = json_decode($raw, true);
             }
 
             return $out;
@@ -51,9 +59,12 @@ final class Settings
         return $this->loaded = $values;
     }
 
-    public function set(string $key, mixed $value): void
+    public function set(string $key, mixed $value, bool $secret = false): void
     {
-        Setting::query()->updateOrCreate(['key' => $key], ['value' => json_encode($value)]);
+        $encoded = json_encode($value) ?: 'null';
+        $stored = $secret ? Crypt::encryptString($encoded) : $encoded;
+
+        Setting::query()->updateOrCreate(['key' => $key], ['value' => $stored, 'is_secret' => $secret]);
 
         $this->flush();
     }
