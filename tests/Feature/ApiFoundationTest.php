@@ -32,36 +32,39 @@ it('renders a validation failure as RFC 7807 with a field-keyed errors object', 
 });
 
 it('renders a thrown ApiException with its own status and code', function () {
-    Route::get('/api/v1/_test/conflict', function () {
+    // Three segments — Z-5.2's generic {module} (1 segment) and {module}/{id} (2
+    // segments) routes are maximally greedy, so a 2-segment fixture path here would
+    // be shadowed by ModuleResourceController::show() instead of hitting this route.
+    Route::get('/api/v1/_test/conflict/case', function () {
         throw ApiException::conflict('The record has been modified since it was last read.');
     });
 
-    $response = $this->getJson('/api/v1/_test/conflict');
+    $response = $this->getJson('/api/v1/_test/conflict/case');
 
     $response->assertStatus(409)->assertJson(['code' => 'conflict']);
 });
 
 it('renders a gone endpoint (410) for a removed module', function () {
-    Route::get('/api/v1/_test/gone', function () {
+    Route::get('/api/v1/_test/gone/case', function () {
         throw ApiException::gone('The SMS module is not part of this system.');
     });
 
-    $response = $this->getJson('/api/v1/_test/gone');
+    $response = $this->getJson('/api/v1/_test/gone/case');
 
     $response->assertStatus(410)->assertJson(['code' => 'gone']);
 });
 
 it('sets an ETag on a GET response and returns 304 for a matching If-None-Match', function () {
-    Route::get('/api/v1/_test/etag', fn () => response()->json(['data' => ['id' => '1']]))
+    Route::get('/api/v1/_test/etag/case', fn () => response()->json(['data' => ['id' => '1']]))
         ->middleware(SetETag::class);
 
-    $first = $this->getJson('/api/v1/_test/etag');
+    $first = $this->getJson('/api/v1/_test/etag/case');
     $first->assertOk();
     $etag = $first->headers->get('ETag');
 
     expect($etag)->not->toBeNull();
 
-    $second = $this->getJson('/api/v1/_test/etag', ['If-None-Match' => $etag]);
+    $second = $this->getJson('/api/v1/_test/etag/case', ['If-None-Match' => $etag]);
     $second->assertStatus(304)
         ->assertNoContent(304);
 });

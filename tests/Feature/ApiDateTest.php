@@ -34,8 +34,15 @@ it('returns null for a null or empty inbound value', function () {
         ->and(ApiDate::in(''))->toBeNull();
 });
 
+it('accepts a bare date as midnight UTC — unambiguous, no locale-dependent ordering', function () {
+    $parsed = ApiDate::in('2026-06-12');
+
+    expect($parsed->toDateTimeString())->toBe('2026-06-12 00:00:00')
+        ->and($parsed->timezoneName)->toBe('UTC');
+});
+
 it('rejects an unparseable or ambiguous datetime rather than guessing', function () {
-    foreach (['12/06/2026', 'next tuesday', '2026-06-12', 'not a date at all'] as $bad) {
+    foreach (['12/06/2026', 'next tuesday', 'not a date at all'] as $bad) {
         expect(fn () => ApiDate::in($bad))->toThrow(InvalidArgumentException::class);
     }
 });

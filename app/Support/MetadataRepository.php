@@ -62,6 +62,15 @@ final class MetadataRepository
     }
 
     /**
+     * Only genuinely Studio-added fields (is_custom) belong in the `_custom` sidecar —
+     * a seeded base-table column (leads.vertical, leads.stage, ...) is also registered
+     * with storage='column' for its filterable/sortable metadata, but it is a real
+     * column on the base table, not a sidecar attribute. Treating it as one would
+     * silently divert its value into the sidecar (or drop it, if no sidecar table
+     * exists yet) instead of the real column — this is exactly that bug, caught while
+     * building Z-5.2, which is the first thing to both seed this metadata and exercise
+     * create/update on the same models.
+     *
      * @return array<string, string>
      */
     private function buildCustomFieldDefinitions(string $table): array
@@ -76,7 +85,7 @@ final class MetadataRepository
 
             $fields = $module['fields'] ?? [];
             foreach (is_array($fields) ? $fields : [] as $name => $field) {
-                if (! is_array($field) || ($field['storage'] ?? null) !== 'column') {
+                if (! is_array($field) || ($field['storage'] ?? null) !== 'column' || ! ($field['is_custom'] ?? false)) {
                     continue;
                 }
 
@@ -131,6 +140,7 @@ final class MetadataRepository
                         'type' => $f->type,
                         'label_key' => $f->label_key,
                         'storage' => $f->storage,
+                        'is_custom' => $f->is_custom,
                         'required' => $f->required,
                         'filterable' => $f->filterable,
                         'sortable' => $f->sortable,

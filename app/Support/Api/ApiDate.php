@@ -44,6 +44,17 @@ final class ApiDate
                 return $strict->utc();
             }
         } catch (InvalidFormatException) {
+            // fall through to the next attempt
+        }
+
+        // A bare date is unambiguous (no locale-dependent day/month ordering) and is
+        // what filter[field][gte]=2026-07-01-style range filters commonly send.
+        try {
+            $dateOnly = Carbon::createFromFormat('Y-m-d', $value, 'UTC');
+            if ($dateOnly !== null && $dateOnly->format('Y-m-d') === $value) {
+                return $dateOnly->startOfDay()->utc();
+            }
+        } catch (InvalidFormatException) {
             // fall through to the ISO-8601 attempt below
         }
 
