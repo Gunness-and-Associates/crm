@@ -19,6 +19,12 @@ final class MetadataRepository
 {
     private const VERSION_KEY = 'meta:version';
 
+    /** @var array<string, mixed>|null */
+    private ?array $compiledCache = null;
+
+    /** @var array<string, array<string, string>> table => {field name: field type} */
+    private array $customFieldDefinitionsByTable = [];
+
     public function version(): int
     {
         $value = Cache::get(Keys::cache(self::VERSION_KEY), 1);
@@ -30,8 +36,58 @@ final class MetadataRepository
     {
         $next = $this->version() + 1;
         Cache::forever(Keys::cache(self::VERSION_KEY), $next);
+        $this->compiledCache = null;
+        $this->customFieldDefinitionsByTable = [];
 
         return $next;
+    }
+
+    /**
+     * The real (storage=column) fields registered against a table — what
+     * HasCustomFields needs to know which attributes live in its sidecar. Kept here,
+     * not memoized in the trait itself: this repository is the one thing already
+     * guaranteed to be freshly re-created per request/test (Z-4.4) — a plain static
+     * cache in the trait would survive across requests that share a PHP process
+     * (e.g. Pest's test run) with no way to invalidate it against the metadata version.
+     *
+     * @return array<string, string> field name => field-type key
+     */
+    public function customFieldDefinitionsForTable(string $table): array
+    {
+        if (! array_key_exists($table, $this->customFieldDefinitionsByTable)) {
+            $this->customFieldDefinitionsByTable[$table] = $this->buildCustomFieldDefinitions($table);
+        }
+
+        return $this->customFieldDefinitionsByTable[$table];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function buildCustomFieldDefinitions(string $table): array
+    {
+        $definitions = [];
+        $modules = $this->compiled()['modules'] ?? [];
+
+        foreach (is_array($modules) ? $modules : [] as $module) {
+            if (! is_array($module) || ($module['table_name'] ?? null) !== $table) {
+                continue;
+            }
+
+            $fields = $module['fields'] ?? [];
+            foreach (is_array($fields) ? $fields : [] as $name => $field) {
+                if (! is_array($field) || ($field['storage'] ?? null) !== 'column') {
+                    continue;
+                }
+
+                $type = $field['type'] ?? null;
+                if (is_string($name) && is_string($type)) {
+                    $definitions[$name] = $type;
+                }
+            }
+        }
+
+        return $definitions;
     }
 
     /**
@@ -39,7 +95,15 @@ final class MetadataRepository
      */
     public function compiled(): array
     {
-        return Cache::rememberForever(
+        // MetadataRepository is a singleton (one instance per request) — this memoizes
+        // the cache-store round trip itself (Z-4.4), since compiled() is called from
+        // several independent places (HasCustomFields per model class, dashboard
+        // widgets, ...) that would otherwise each pay for it within the same request.
+        if ($this->compiledCache !== null) {
+            return $this->compiledCache;
+        }
+
+        return $this->compiledCache = Cache::rememberForever(
             Keys::cache('meta:v'.$this->version()),
             fn (): array => $this->compile(),
         );

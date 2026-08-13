@@ -2,9 +2,8 @@
 
 namespace App\Models\Concerns;
 
-use App\Models\Metadata\Field;
-use App\Models\Metadata\Module;
 use App\Support\FieldTypeContract;
+use App\Support\MetadataRepository;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -19,6 +18,12 @@ use Illuminate\Support\Facades\Schema;
  * otherwise a plain save() would try to write them into the base table's
  * (nonexistent) column. They are cast via Eloquent's own castAttribute(), so
  * the field-type contract's cast strings behave identically to a real column.
+ *
+ * Field definitions come from MetadataRepository::compiled() (Z-4.4) rather
+ * than a live Module/Field query — on a list of N records, retrieved() fires
+ * once per row, and a live query there is a real N+1: the definitions are
+ * identical for every row of the same table and change only on a Studio edit,
+ * exactly what the compiled cache already tracks via its version bump.
  *
  * @mixin Model
  */
@@ -90,20 +95,11 @@ trait HasCustomFields
     }
 
     /**
-     * @return list<Field>
+     * @return array<string, string> field name => field-type key
      */
-    protected function customFields(): array
+    protected function customFieldDefinitions(): array
     {
-        $module = Module::query()->where('table_name', $this->getTable())->first();
-        if ($module === null) {
-            return [];
-        }
-
-        return array_values(Field::query()
-            ->where('module_id', $module->id)
-            ->where('storage', 'column')
-            ->get()
-            ->all());
+        return app(MetadataRepository::class)->customFieldDefinitionsForTable($this->getTable());
     }
 
     /**
@@ -112,7 +108,7 @@ trait HasCustomFields
     protected function customFieldNames(): array
     {
         if ($this->customFieldNamesCache === null) {
-            $this->customFieldNamesCache = array_map(fn (Field $f): string => $f->name, $this->customFields());
+            $this->customFieldNamesCache = array_keys($this->customFieldDefinitions());
         }
 
         return $this->customFieldNamesCache;
@@ -126,11 +122,11 @@ trait HasCustomFields
         $contract = app(FieldTypeContract::class);
         $casts = [];
 
-        foreach ($this->customFields() as $field) {
-            if ($contract->exists($field->type)) {
-                $cast = $contract->type($field->type)['cast'] ?? null;
+        foreach ($this->customFieldDefinitions() as $name => $type) {
+            if ($contract->exists($type)) {
+                $cast = $contract->type($type)['cast'] ?? null;
                 if (is_string($cast)) {
-                    $casts[$field->name] = $cast;
+                    $casts[$name] = $cast;
                 }
             }
         }
