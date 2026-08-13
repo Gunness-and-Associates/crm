@@ -48,14 +48,19 @@ expect()->extend('toBeOne', function () {
 /**
  * Grants $user a role with $level for one module action (default 'view') —
  * shared across every ACL-aware test.
+ *
+ * updateOrCreate, not create: Role::created dynamically registers a default
+ * 'none' row for every existing module (Z-2.3), including $moduleKey when its
+ * Module metadata row already exists (e.g. a test that seeds
+ * MetadataFixtureSeeder before calling this) — a plain create() would then
+ * collide with that auto-registered row.
  */
 function grantAccess(User $user, string $moduleKey, AccessLevel $level, string $action = 'view'): void
 {
     $role = Role::factory()->create();
-    RoleModulePermission::factory()->create([
-        'role_id' => $role->id,
-        'module_key' => $moduleKey,
-        $action => $level,
-    ]);
+    RoleModulePermission::query()->updateOrCreate(
+        ['role_id' => $role->id, 'module_key' => $moduleKey],
+        [$action => $level],
+    );
     $user->roles()->attach($role);
 }
