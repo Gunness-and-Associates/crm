@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Laravel\Passport\Contracts\OAuthenticatable;
+use Laravel\Passport\HasApiTokens;
 use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
@@ -30,9 +32,10 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
  * @property list<string>|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
  */
-class User extends Authenticatable implements AuditableContract
+class User extends Authenticatable implements AuditableContract, OAuthenticatable
 {
     use Auditable;
+    use HasApiTokens;
 
     /** @use HasFactory<UserFactory> */
     use HasFactory;

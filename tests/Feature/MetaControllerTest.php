@@ -9,7 +9,7 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->seed(MetadataFixtureSeeder::class);
-    $this->actingAs(User::factory()->create(['is_admin' => true]));
+    actingAsApiUser(User::factory()->create(['is_admin' => true]));
 });
 
 it('lists modules with a record count', function () {

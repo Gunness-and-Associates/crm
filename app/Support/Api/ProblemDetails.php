@@ -42,7 +42,7 @@ final class ProblemDetails
             'status' => $status,
             'code' => $code,
             'detail' => $detail,
-            'trace_id' => (string) Str::ulid(),
+            'trace_id' => app(ApiTrace::class)->id(),
         ];
 
         if ($errors !== null) {

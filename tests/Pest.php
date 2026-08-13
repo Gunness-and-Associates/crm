@@ -4,6 +4,10 @@ use App\Models\Role;
 use App\Models\RoleModulePermission;
 use App\Models\User;
 use App\Support\Acl\AccessLevel;
+use Illuminate\Support\Str;
+use Laravel\Passport\Client;
+use League\OAuth2\Server\ResourceServer;
+use Psr\Http\Message\ServerRequestInterface;
 use Tests\TestCase;
 
 /*
@@ -63,4 +67,48 @@ function grantAccess(User $user, string $moduleKey, AccessLevel $level, string $
         [$action => $level],
     );
     $user->roles()->attach($role);
+}
+
+/**
+ * Fakes a personal-access-token request for /api/v1/* (Z-5.3): AuthenticateApiToken
+ * validates the bearer token directly against the ResourceServer (so it can support
+ * client-credentials too, see the middleware's own docblock) rather than through
+ * Passport's TokenGuard — so Passport::actingAs() alone doesn't reach it. Mirrors
+ * Passport::actingAsClient()'s own approach of swapping the ResourceServer instance.
+ *
+ * @param  list<string>  $scopes
+ */
+function actingAsApiUser(User $user, array $scopes = ['*']): User
+{
+    $mock = Mockery::mock(ResourceServer::class);
+    $mock->shouldReceive('validateAuthenticatedRequest')->andReturnUsing(
+        fn (ServerRequestInterface $request) => $request
+            ->withAttribute('oauth_client_id', (string) Str::uuid())
+            ->withAttribute('oauth_user_id', $user->id)
+            ->withAttribute('oauth_scopes', $scopes)
+    );
+    app()->instance(ResourceServer::class, $mock);
+
+    return $user;
+}
+
+/**
+ * Fakes a client-credentials request for /api/v1/* — no oauth_user_id, so
+ * AuthenticateApiToken resolves the acting user from $client->owner instead
+ * (docs/contracts/api-contract.md §1.1: "a client also carries a user identity").
+ *
+ * @param  list<string>  $scopes
+ */
+function actingAsApiClient(Client $client, array $scopes = ['*']): Client
+{
+    $mock = Mockery::mock(ResourceServer::class);
+    $mock->shouldReceive('validateAuthenticatedRequest')->andReturnUsing(
+        fn (ServerRequestInterface $request) => $request
+            ->withAttribute('oauth_client_id', $client->id)
+            ->withAttribute('oauth_user_id', null)
+            ->withAttribute('oauth_scopes', $scopes)
+    );
+    app()->instance(ResourceServer::class, $mock);
+
+    return $client;
 }

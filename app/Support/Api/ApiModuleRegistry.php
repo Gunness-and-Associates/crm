@@ -45,6 +45,17 @@ final class ApiModuleRegistry
     }
 
     /**
+     * Every module key with an API-registered model — the basis for the dynamic
+     * {module}:read/write/delete OAuth scopes (Z-5.3).
+     *
+     * @return list<string>
+     */
+    public function moduleKeys(): array
+    {
+        return array_keys(self::MODEL_MAP);
+    }
+
+    /**
      * @return class-string<Model>
      */
     public function modelFor(string $moduleKey): string

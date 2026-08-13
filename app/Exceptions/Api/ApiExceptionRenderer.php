@@ -43,7 +43,13 @@ final class ApiExceptionRenderer
         }
 
         if ($e instanceof TooManyRequestsHttpException) {
-            return ProblemDetails::render(429, 'rate_limited', 'Too many requests. Please slow down.');
+            // The exception carries its own Retry-After/X-RateLimit-* headers (set by
+            // ApiThrottle/ThrottleRequests) — a bare renderable() return here does not
+            // inherit them (Handler::render() only merges headers on the *default*
+            // rendering path, not through renderViaCallbacks()), so forward them
+            // explicitly. §1.6: "429 includes Retry-After".
+            return ProblemDetails::render(429, 'rate_limited', 'Too many requests. Please slow down.')
+                ->withHeaders($e->getHeaders());
         }
 
         if ($e instanceof HttpExceptionInterface) {
