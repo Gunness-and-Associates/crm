@@ -62,3 +62,15 @@ it('caches the compiled structure per version', function () {
     expect($repo->compiled())->toBe($repo->compiled())
         ->and($repo->compiled()['version'])->toBe($repo->version());
 });
+
+it('invalidates the in-memory compiled() memo on bump(), so a change is visible within the same request', function () {
+    $this->seed(MetadataFixtureSeeder::class);
+    $repo = app(MetadataRepository::class);
+
+    $before = $repo->compiled();
+    Module::factory()->create(['key' => 'a_new_module']); // triggers Module::saved -> bump()
+    $after = $repo->compiled();
+
+    expect($after['version'])->toBeGreaterThan($before['version'])
+        ->and($after['modules'])->toHaveKey('a_new_module');
+});

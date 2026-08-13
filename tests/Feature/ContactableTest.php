@@ -3,6 +3,7 @@
 use App\Models\Metadata\Field;
 use App\Models\Metadata\Module;
 use App\Models\User;
+use App\Support\MetadataRepository;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -114,4 +115,27 @@ it('merges custom field names into fillable', function () {
     $record = new ContactableFixture;
     expect($record->getFillable())->toContain('favourite_colour')
         ->and($record->getFillable())->toContain('first_name');
+});
+
+it('does not re-query module/field metadata per row when hydrating a list (Z-4.4)', function () {
+    $module = Module::factory()->create(['key' => 'contactable_fixtures', 'table_name' => 'contactable_fixtures']);
+    Field::factory()->create(['module_id' => $module->id, 'name' => 'favourite_colour', 'type' => 'text']);
+
+    for ($i = 0; $i < 5; $i++) {
+        ContactableFixture::create(['first_name' => "Record{$i}"]);
+    }
+
+    // A real request already warms this cache once — retrieving the list must not
+    // re-query the metadata tables on top of it, regardless of how many rows come back.
+    app(MetadataRepository::class)->compiled();
+
+    DB::enableQueryLog();
+    ContactableFixture::query()->get();
+    $queries = collect(DB::getQueryLog())->pluck('query');
+    DB::flushQueryLog();
+    DB::disableQueryLog();
+
+    $metadataQueries = $queries->filter(fn (string $sql): bool => str_contains($sql, '`modules`') || str_contains($sql, '`fields`'));
+
+    expect($metadataQueries)->toHaveCount(0);
 });
