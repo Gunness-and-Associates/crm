@@ -1,8 +1,10 @@
 <?php
 
+use App\Exceptions\Api\ApiExceptionRenderer;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,5 +17,13 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Every /api/v1/* error is RFC 7807 (docs/contracts/api-contract.md §1.5) —
+        // never the framework's default JSON error shape or an HTML error page.
+        $exceptions->renderable(function (Throwable $e, Request $request) {
+            if (! $request->is('api/v1/*')) {
+                return null;
+            }
+
+            return app(ApiExceptionRenderer::class)->render($e);
+        });
     })->create();
