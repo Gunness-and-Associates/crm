@@ -15,6 +15,13 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        // The legacy `/Api/V8/*` adapter (Z-5.5) needs bare `/public/Api/...` URLs
+        // with no `/api` prefix — the `api:` file above always gets one (see
+        // ApplicationBuilder::buildRoutingCallback()) — so it's registered via
+        // `then`, which runs with no group/prefix wrapper at all.
+        then: function () {
+            require __DIR__.'/../routes/legacy_api.php';
+        },
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
@@ -37,7 +44,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Every /api/v1/* error is RFC 7807 (docs/contracts/api-contract.md §1.5) —
         // never the framework's default JSON error shape or an HTML error page.
         $exceptions->renderable(function (Throwable $e, Request $request) {
-            if (! $request->is('api/v1/*')) {
+            if (! $request->is('api/v1/*') && ! $request->is('public/Api/*')) {
                 return null;
             }
 

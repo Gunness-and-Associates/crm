@@ -26,12 +26,12 @@ final class ApiValidationRuleBuilder
      * @param  array<string, array<string, mixed>>  $fields
      * @return array<string, array<int, mixed>>
      */
-    public function build(array $fields, bool $forCreate): array
+    public function build(array $fields, bool $forCreate, bool $strictDates = false): array
     {
         $rules = [];
 
         foreach ($fields as $name => $field) {
-            [$rule, $wildcard] = $this->rulesFor($field, $forCreate);
+            [$rule, $wildcard] = $this->rulesFor($field, $forCreate, $strictDates);
             $rules[$name] = $rule;
 
             if ($wildcard !== null) {
@@ -46,7 +46,7 @@ final class ApiValidationRuleBuilder
      * @param  array<string, mixed>  $field
      * @return array{0: array<int, mixed>, 1: array<int, mixed>|null}
      */
-    private function rulesFor(array $field, bool $forCreate): array
+    private function rulesFor(array $field, bool $forCreate, bool $strictDates): array
     {
         $type = is_string($field['type'] ?? null) ? $field['type'] : 'text';
         $required = $forCreate && (bool) ($field['required'] ?? false);
@@ -93,11 +93,15 @@ final class ApiValidationRuleBuilder
                 break;
             case 'date':
             case 'datetime':
-                $rule[] = function (string $attribute, mixed $value, \Closure $fail): void {
+                $rule[] = function (string $attribute, mixed $value, \Closure $fail) use ($strictDates): void {
                     try {
-                        ApiDate::in(is_string($value) ? $value : null);
+                        $strictDates
+                            ? ApiDate::inStrict(is_string($value) ? $value : null)
+                            : ApiDate::in(is_string($value) ? $value : null);
                     } catch (\InvalidArgumentException) {
-                        $fail("The {$attribute} must be Y-m-d H:i:s or full ISO-8601.");
+                        $fail($strictDates
+                            ? "The {$attribute} must be Y-m-d H:i:s."
+                            : "The {$attribute} must be Y-m-d H:i:s or full ISO-8601.");
                     }
                 };
                 break;

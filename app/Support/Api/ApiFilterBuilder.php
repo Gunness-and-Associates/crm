@@ -29,11 +29,11 @@ final class ApiFilterBuilder
      * @param  Builder<Model>  $query
      * @return Builder<Model>
      */
-    public function apply(Builder $query, string $moduleKey, Request $request): Builder
+    public function apply(Builder $query, string $moduleKey, Request $request, bool $strict = true): Builder
     {
-        $this->applyFilters($query, $moduleKey, $request);
+        $this->applyFilters($query, $moduleKey, $request, $strict);
         $this->applySearch($query, $request);
-        $this->applySort($query, $moduleKey, $request);
+        $this->applySort($query, $moduleKey, $request, $strict);
 
         return $query;
     }
@@ -41,7 +41,7 @@ final class ApiFilterBuilder
     /**
      * @param  Builder<Model>  $query
      */
-    private function applyFilters(Builder $query, string $moduleKey, Request $request): void
+    private function applyFilters(Builder $query, string $moduleKey, Request $request, bool $strict): void
     {
         $filters = $request->query('filter', []);
         if (! is_array($filters) || $filters === []) {
@@ -53,6 +53,12 @@ final class ApiFilterBuilder
 
         foreach ($filters as $field => $spec) {
             if (! is_string($field) || ! in_array($field, $filterable, true)) {
+                if (! $strict) {
+                    // api-contract.md §2.2 rule 6 (legacy V8 adapter): unknown query
+                    // parameters are ignored, matching SuiteCRM's tolerance.
+                    continue;
+                }
+
                 $name = is_string($field) ? $field : (string) $field;
 
                 throw new ApiException(422, 'validation_failed', 'One or more filters are invalid.', [
@@ -145,7 +151,7 @@ final class ApiFilterBuilder
     /**
      * @param  Builder<Model>  $query
      */
-    private function applySort(Builder $query, string $moduleKey, Request $request): void
+    private function applySort(Builder $query, string $moduleKey, Request $request, bool $strict): void
     {
         $sort = $request->query('sort');
         if (! is_string($sort) || $sort === '') {
@@ -159,6 +165,10 @@ final class ApiFilterBuilder
             $field = $descending ? substr($part, 1) : $part;
 
             if (! in_array($field, $sortable, true)) {
+                if (! $strict) {
+                    continue;
+                }
+
                 throw new ApiException(422, 'validation_failed', 'One or more sort fields are invalid.', [
                     $field => ["The field [{$field}] is not sortable."],
                 ]);
