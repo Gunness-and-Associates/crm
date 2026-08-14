@@ -3,7 +3,9 @@
 namespace App\Http\Middleware\Api;
 
 use App\Exceptions\Api\ApiException;
+use App\Support\Api\ApiModuleRegistry;
 use App\Support\Api\ApiScopes;
+use App\Support\LegacyApi\LegacyModuleAlias;
 use Closure;
 use Illuminate\Http\Request;
 use Laravel\Passport\Contracts\ScopeAuthorizable;
@@ -20,6 +22,12 @@ use Symfony\Component\HttpFoundation\Response;
  * `oauth_access_token` request attribute), not `$request->user()->tokenCan()` — a
  * client-credentials token whose client has no `owner` has no resolvable user, but
  * its own granted scopes are still checkable directly.
+ *
+ * Shared with the legacy `/Api/V8/*` adapter (Z-5.5) too — a scope is always named
+ * after the *canonical* v1 module key, never the legacy alias, so a legacy request
+ * (whose module comes from a `{legacyModule}` route param, or from `data.type` in
+ * the body for the type-in-body write routes) is translated before building the
+ * scope string.
  */
 final class RequireScope
 {
@@ -40,8 +48,7 @@ final class RequireScope
 
     private function scopeForRequest(Request $request): string
     {
-        $module = $request->route('module');
-        $module = is_string($module) ? $module : '';
+        $module = $this->moduleForRequest($request);
 
         $action = match ($request->method()) {
             'POST', 'PATCH', 'PUT' => 'write',
@@ -50,5 +57,29 @@ final class RequireScope
         };
 
         return ApiScopes::for($module, $action);
+    }
+
+    private function moduleForRequest(Request $request): string
+    {
+        $module = $request->route('module');
+        if (! is_string($module)) {
+            $module = $request->route('legacyModule');
+        }
+        if (! is_string($module)) {
+            $module = $request->input('data.type');
+        }
+        $module = is_string($module) ? $module : '';
+
+        if ($module === '' || app(ApiModuleRegistry::class)->exists($module)) {
+            return $module;
+        }
+
+        try {
+            return app(LegacyModuleAlias::class)->resolve($module)->module;
+        } catch (ApiException) {
+            // Not a recognised legacy alias either — return as-is; the controller
+            // raises its own clearer 404/410 once execution gets that far.
+            return $module;
+        }
     }
 }

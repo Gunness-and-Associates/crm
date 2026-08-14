@@ -26,6 +26,32 @@ final class ApiDate
     }
 
     /**
+     * Legacy V8 adapter inbound (api-contract.md §2.2 rule 3): accepts *only*
+     * `Y-m-d H:i:s` — no ISO-8601, no bare date. "Reject anything else with a
+     * clear error rather than silently discarding it — the silent discard was
+     * the original bug."
+     *
+     * @throws \InvalidArgumentException
+     */
+    public static function inStrict(?string $value): ?Carbon
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            $strict = Carbon::createFromFormat(self::WIRE_FORMAT, $value, 'UTC');
+            if ($strict !== null && $strict->format(self::WIRE_FORMAT) === $value) {
+                return $strict->utc();
+            }
+        } catch (InvalidFormatException) {
+            // falls through to the exception below
+        }
+
+        throw new \InvalidArgumentException("Datetime [{$value}] is not in Y-m-d H:i:s format.");
+    }
+
+    /**
      * Inbound: accepts exactly `Y-m-d H:i:s` or full ISO-8601 — both unambiguous
      * regardless of locale. Anything else throws; the caller turns that into a 422
      * naming the field, never a silently blanked value.
