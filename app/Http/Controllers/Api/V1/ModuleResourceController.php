@@ -11,6 +11,7 @@ use App\Support\Api\ApiResponse;
 use App\Support\Api\ApiValidationRuleBuilder;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -21,15 +22,23 @@ use Symfony\Component\HttpFoundation\Response;
  * update/destroy driven entirely by ApiModuleRegistry's metadata, never a
  * per-module subclass. docs/contracts/api-contract.md §1.2–1.3.
  *
- * Authentication/scopes are Z-5.3's job — these routes rely on whatever guard is
- * already active (session in tests today); ACL itself already applies for free
- * through the model classes' own HasAcl global scope, which is also what makes the
- * 404-vs-403 rule (§1.5) correct with no extra code here: a record the caller's
- * role excludes is simply not found by the query, the same as a record that never
- * existed.
+ * ACL is two layers (Z-5.4), matching the interface exactly since both share the
+ * same code:
+ *  - view-level access is the model classes' own HasAcl global scope, applied for
+ *    free by every `{module}::query()`/`findOrFail()` call below — this alone
+ *    produces the 404-vs-403 rule (§1.5): a record the caller's role excludes is
+ *    simply not found, the same as a record that never existed. No second filter
+ *    is written here for that.
+ *  - create/edit/delete are a *different* permission level than view (a role can
+ *    be view=All but edit=Owner), which the query scope alone can't express — so
+ *    store/update/destroy additionally check the matching {Module}Policy (extends
+ *    CrmPolicy, the same policy Filament resources use), producing 403 for a
+ *    visible-but-not-editable record.
  */
 final class ModuleResourceController extends Controller
 {
+    use AuthorizesRequests;
+
     private const DEFAULT_PAGE_SIZE = 25;
 
     private const MAX_PAGE_SIZE = 200;
@@ -76,6 +85,8 @@ final class ModuleResourceController extends Controller
     public function store(Request $request, string $module): JsonResponse
     {
         $modelClass = $this->resolveModel($module);
+        $this->authorize('create', $modelClass);
+
         $fields = $this->registry->fields($module);
         $rules = $this->validationRules->build($fields, forCreate: true);
 
@@ -93,6 +104,7 @@ final class ModuleResourceController extends Controller
     public function update(Request $request, string $module, string $id): JsonResponse
     {
         $record = $this->findOrFail($module, $id, $request);
+        $this->authorize('update', $record);
 
         $ifMatch = $request->header('If-Match');
         if ($ifMatch !== null && $ifMatch !== $this->recordETag($record)) {
@@ -115,6 +127,8 @@ final class ModuleResourceController extends Controller
     public function destroy(Request $request, string $module, string $id): Response
     {
         $record = $this->findOrFail($module, $id, $request);
+        $this->authorize('delete', $record);
+
         $record->delete();
 
         return ApiResponse::noContent();
