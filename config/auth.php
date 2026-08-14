@@ -42,6 +42,13 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Z-5.3: bearer tokens for /api/v1/* (OAuth2 client credentials + personal
+        // access tokens), per docs/contracts/api-contract.md §1.1.
+        'api' => [
+            'driver' => 'passport',
+            'provider' => 'users',
+        ],
     ],
 
     /*

@@ -10,6 +10,9 @@ use App\Models\Metadata\OptionList;
 use App\Models\Role;
 use App\Support\Acl;
 use App\Support\ActivityBlueprintMacro;
+use App\Support\Api\ApiModuleRegistry;
+use App\Support\Api\ApiScopes;
+use App\Support\Api\ApiTrace;
 use App\Support\ContactableBlueprintMacro;
 use App\Support\Livewire\SubdirectoryHandleRequests;
 use App\Support\MetadataRepository;
@@ -17,9 +20,14 @@ use App\Support\RuntimeMailConfigurator;
 use App\Support\SchemaManager\SchemaManager;
 use App\Support\SchemaManager\Snapshotter;
 use App\Support\Settings;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Passport\Client;
+use Laravel\Passport\Passport;
 use Livewire\Mechanisms\HandleRequests\HandleRequests;
 
 class AppServiceProvider extends ServiceProvider
@@ -34,10 +42,18 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(Snapshotter::class);
         $this->app->singleton(SchemaManager::class);
         $this->app->singleton(Acl::class);
+        $this->app->scoped(ApiTrace::class);
 
         // The app may be served from a sub-directory (e.g. XAMPP Apache at
         // /newcrmga/public) rather than a vhost root — see SubdirectoryHandleRequests.
         $this->app->singleton(HandleRequests::class, SubdirectoryHandleRequests::class);
+
+        // Z-5.3: PassportServiceProvider reads these two during ITS OWN boot() to
+        // decide which routes to register — register() runs for every provider before
+        // boot() runs for any of them, so this must happen here, not in boot(), or it
+        // takes effect one bootstrap cycle too late.
+        Passport::$deviceCodeGrantEnabled = false; // authorization-code/device flows are out of scope.
+        Passport::$registersJsonApiRoutes = true; // /oauth/clients + /oauth/personal-access-tokens for free.
     }
 
     /**
@@ -74,6 +90,27 @@ class AppServiceProvider extends ServiceProvider
         // new capability is never granted implicitly.
         Module::created(fn (Module $module) => $this->app->make(Acl::class)->registerModule($module->key));
         Role::created(fn (Role $role) => $this->app->make(Acl::class)->registerRole($role->id));
+
+        // Z-5.3: OAuth2 client-credentials + personal access tokens, per
+        // docs/contracts/api-contract.md §1.1. Scopes are built from the same module
+        // registry ModuleResourceController uses (Z-5.2) — a module registered there
+        // needs no separate scope-list update here.
+        Passport::tokensExpireIn(now()->addHour());
+        Passport::refreshTokensExpireIn(now()->addDays(30));
+        Passport::personalAccessTokensExpireIn(now()->addMonths(6));
+        Passport::tokensCan((new ApiScopes($this->app->make(ApiModuleRegistry::class)))->all());
+
+        // docs/contracts/api-contract.md §1.6 — "600 requests per minute per client,
+        // configurable per client". AuthenticateApiToken resolves the client once and
+        // stores it on the request, so no extra query here.
+        RateLimiter::for('api', function (Request $request) {
+            $client = $request->attributes->get('oauth_client');
+            $perMinute = $client instanceof Client && $client->rate_limit_per_minute !== null
+                ? $client->rate_limit_per_minute
+                : 600;
+
+            return Limit::perMinute($perMinute)->by($client instanceof Client ? $client->id : $request->ip());
+        });
 
         // Build the SMTP mailer from the settings store, never .env (Z-4.1). No database
         // may be reachable yet at this boot (composer's package:discover, a fresh install

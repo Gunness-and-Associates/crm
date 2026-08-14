@@ -12,7 +12,7 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->seed(MetadataFixtureSeeder::class);
-    $this->actingAs(User::factory()->create(['is_admin' => true]));
+    actingAsApiUser(User::factory()->create(['is_admin' => true]));
 });
 
 it('returns 404 for an unregistered module', function () {
@@ -128,7 +128,7 @@ it('returns 404 (not 403) for a record the caller cannot see', function () {
     grantAccess($other, 'leads', AccessLevel::Owner);
     $lead = Lead::factory()->create(['assigned_user_id' => $owner->id]);
 
-    $this->actingAs($other);
+    actingAsApiUser($other);
 
     $this->getJson("/api/v1/leads/{$lead->id}")->assertStatus(404);
 });

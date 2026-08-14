@@ -58,6 +58,7 @@ jobs:
         run: |
           cp .env.example .env
           php artisan key:generate
+          php artisan passport:keys
 
       - name: Migrate on MySQL (validate schema on the real engine)
         env:

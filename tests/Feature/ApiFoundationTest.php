@@ -3,10 +3,21 @@
 use App\Exceptions\Api\ApiException;
 use App\Http\Middleware\Api\EnforceIdempotencyKey;
 use App\Http\Middleware\Api\SetETag;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
+
+uses(RefreshDatabase::class);
 
 it('renders an unknown /api/v1 route as an RFC 7807 404, not a default error page', function () {
+    // Hits the real {module} route (unlike this file's other _test/* fixture routes,
+    // registered outside the v1 group), so it needs a valid token too. This file has
+    // no RefreshDatabase trait, so make() — the 404 comes from the module registry,
+    // never touches the user row, no need to persist it.
+    actingAsApiUser(User::factory()->make(['id' => (string) Str::uuid()]));
+
     $response = $this->getJson('/api/v1/does-not-exist');
 
     $response->assertStatus(404)
