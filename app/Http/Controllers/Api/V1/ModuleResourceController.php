@@ -9,6 +9,7 @@ use App\Support\Api\ApiFilterBuilder;
 use App\Support\Api\ApiModuleRegistry;
 use App\Support\Api\ApiResponse;
 use App\Support\Api\ApiValidationRuleBuilder;
+use App\Support\FullName;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -90,7 +91,7 @@ final class ModuleResourceController extends Controller
         $fields = $this->registry->fields($module);
         $rules = $this->validationRules->build($fields, forCreate: true);
 
-        $attributes = $this->normalizeDatetimes($this->stringKeyedArray($request->validate($rules)), $fields);
+        $attributes = $this->splitFullName($this->normalizeDatetimes($this->stringKeyedArray($request->validate($rules)), $fields));
 
         /** @var Model $record */
         $record = $modelClass::create($attributes);
@@ -113,7 +114,7 @@ final class ModuleResourceController extends Controller
 
         $fields = $this->registry->fields($module);
         $rules = $this->validationRules->build($fields, forCreate: false);
-        $attributes = $this->normalizeDatetimes($this->stringKeyedArray($request->validate($rules)), $fields);
+        $attributes = $this->splitFullName($this->normalizeDatetimes($this->stringKeyedArray($request->validate($rules)), $fields));
 
         $record->update($attributes);
         $record = $record->fresh() ?? $record;
@@ -288,6 +289,12 @@ final class ModuleResourceController extends Controller
      */
     private function formatAttribute(Model $record, string $name, array $fieldTypes): mixed
     {
+        // full_name has no real column or Eloquent accessor (app/Support/FullName.php)
+        // — getAttribute() would just return null.
+        if ($name === 'full_name' && method_exists($record, 'fullName')) {
+            return $record->fullName();
+        }
+
         $value = $record->getAttribute($name);
 
         if ($value instanceof \BackedEnum) {
@@ -337,6 +344,26 @@ final class ModuleResourceController extends Controller
                 $attributes[$name] = ApiDate::in($value);
             }
         }
+
+        return $attributes;
+    }
+
+    /**
+     * full_name has no real column to write to (app/Support/FullName.php) — an
+     * incoming value is split into the real first_name/last_name columns instead.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function splitFullName(array $attributes): array
+    {
+        $value = $attributes['full_name'] ?? null;
+        if (! is_string($value)) {
+            return $attributes;
+        }
+
+        unset($attributes['full_name']);
+        [$attributes['first_name'], $attributes['last_name']] = FullName::split($value);
 
         return $attributes;
     }

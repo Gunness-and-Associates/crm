@@ -88,6 +88,10 @@ class MetadataFixtureSeeder extends Seeder
         );
 
         $this->field($companies, 'full_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        // Z-5.6/full_name fix: the real Contactable columns full_name has no
+        // accessor/mutator for — see app/Support/FullName.php.
+        $this->field($companies, 'first_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 100]);
+        $this->field($companies, 'last_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 100]);
         $this->field($companies, 'contact_person_name', 'text', ['filterable' => true, 'max_length' => 255]);
         $this->field($companies, 'contact_person_phone', 'phone', ['max_length' => 50]);
         $this->field($companies, 'primary_email', 'email', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
@@ -120,6 +124,8 @@ class MetadataFixtureSeeder extends Seeder
         );
 
         $this->field($students, 'full_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        $this->field($students, 'first_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 100]);
+        $this->field($students, 'last_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 100]);
         $this->field($students, 'primary_email', 'email', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
         $this->field($students, 'phone_mobile', 'phone', ['filterable' => true, 'max_length' => 50]);
         $this->field($students, 'status', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 60]);
@@ -136,6 +142,8 @@ class MetadataFixtureSeeder extends Seeder
         );
 
         $this->field($clients, 'full_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        $this->field($clients, 'first_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 100]);
+        $this->field($clients, 'last_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 100]);
         $this->field($clients, 'primary_email', 'email', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
         $this->field($clients, 'client_status', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 60]);
         $this->field($clients, 'case_type', 'text', ['filterable' => true, 'max_length' => 60]);
@@ -151,6 +159,8 @@ class MetadataFixtureSeeder extends Seeder
         );
 
         $this->field($affiliates, 'full_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        $this->field($affiliates, 'first_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 100]);
+        $this->field($affiliates, 'last_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 100]);
         $this->field($affiliates, 'primary_email', 'email', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
         $this->field($affiliates, 'username', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
         $this->field($affiliates, 'commission', 'decimal', ['filterable' => true, 'sortable' => true]);
@@ -165,6 +175,8 @@ class MetadataFixtureSeeder extends Seeder
         );
 
         $this->field($subscribers, 'full_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        $this->field($subscribers, 'first_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 100]);
+        $this->field($subscribers, 'last_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 100]);
         $this->field($subscribers, 'primary_email', 'email', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
         $this->field($subscribers, 'status', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 30]);
         $this->field($subscribers, 'source', 'text', ['filterable' => true, 'max_length' => 255]);

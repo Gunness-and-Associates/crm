@@ -97,6 +97,18 @@ it('sets vertical from category_c when creating through GA_GALead', function () 
     expect($response->json('data.attributes.category_c'))->toBe('Refugee');
 });
 
+it('splits an incoming full_name into first_name/last_name through the legacy adapter too', function () {
+    actingAsApiUser(User::factory()->create(['is_admin' => true]), ['leads:write']);
+
+    $response = $this->postJson('/public/Api/V8/module', [
+        'data' => ['type' => 'GA_GALead', 'attributes' => ['full_name' => 'Amina Khan']],
+    ])->assertStatus(201);
+
+    expect($response->json('data.attributes.full_name'))->toBe('Amina Khan');
+    $lead = Lead::find($response->json('data.id'));
+    expect($lead->first_name)->toBe('Amina')->and($lead->last_name)->toBe('Khan');
+});
+
 it('updates a record via PATCH /public/Api/V8/module with type+id in the body', function () {
     actingAsApiUser(User::factory()->create(['is_admin' => true]), ['leads:write']);
     $lead = Lead::factory()->create(['stage' => LeadStage::New]);

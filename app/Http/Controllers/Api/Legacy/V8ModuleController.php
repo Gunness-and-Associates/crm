@@ -9,6 +9,7 @@ use App\Support\Api\ApiFilterBuilder;
 use App\Support\Api\ApiModuleRegistry;
 use App\Support\Api\ApiResponse;
 use App\Support\Api\ApiValidationRuleBuilder;
+use App\Support\FullName;
 use App\Support\LegacyApi\LegacyFieldAliasResolver;
 use App\Support\LegacyApi\LegacyModuleAlias;
 use App\Support\LegacyApi\LegacyModuleTarget;
@@ -106,7 +107,7 @@ final class V8ModuleController extends Controller
             $canonicalFields,
         );
 
-        $validated = $this->validate($attributes, $canonicalFields, forCreate: true);
+        $validated = $this->splitFullName($this->validate($attributes, $canonicalFields, forCreate: true));
         $record = $modelClass::create($this->mergeWrite($validated, $verticalAttributes, $target));
 
         return ApiResponse::resource(
@@ -133,7 +134,7 @@ final class V8ModuleController extends Controller
             $canonicalFields,
         );
 
-        $validated = $this->validate($attributes, $canonicalFields, forCreate: false);
+        $validated = $this->splitFullName($this->validate($attributes, $canonicalFields, forCreate: false));
         $record->update($this->mergeWrite($validated, $verticalAttributes, $target));
 
         return ApiResponse::resource(
@@ -268,6 +269,26 @@ final class V8ModuleController extends Controller
     }
 
     /**
+     * full_name has no real column to write to (app/Support/FullName.php) — an
+     * incoming value is split into the real first_name/last_name columns instead.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function splitFullName(array $attributes): array
+    {
+        $value = $attributes['full_name'] ?? null;
+        if (! is_string($value)) {
+            return $attributes;
+        }
+
+        unset($attributes['full_name']);
+        [$attributes['first_name'], $attributes['last_name']] = FullName::split($value);
+
+        return $attributes;
+    }
+
+    /**
      * @param  array<string, mixed>  $validated
      * @param  array<string, mixed>  $verticalAttributes
      * @return array<string, mixed>
@@ -344,6 +365,10 @@ final class V8ModuleController extends Controller
      */
     private function formatAttribute(Model $record, string $name, array $canonicalFields): mixed
     {
+        if ($name === 'full_name' && method_exists($record, 'fullName')) {
+            return $record->fullName();
+        }
+
         $value = $record->getAttribute($name);
 
         if ($value instanceof \BackedEnum) {
