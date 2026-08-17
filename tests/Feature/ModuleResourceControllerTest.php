@@ -144,6 +144,15 @@ it('creates a record and returns 201 with a Location header', function () {
     expect($response->headers->get('Location'))->toStartWith('/api/v1/leads/');
 });
 
+it('splits an incoming full_name into first_name/last_name (no real column backs full_name itself)', function () {
+    $response = $this->postJson('/api/v1/leads', ['full_name' => 'Amina Khan', 'primary_email' => 'a@example.com']);
+
+    $response->assertStatus(201)->assertJsonPath('data.attributes.full_name', 'Amina Khan');
+
+    $lead = Lead::find($response->json('data.id'));
+    expect($lead->first_name)->toBe('Amina')->and($lead->last_name)->toBe('Khan');
+});
+
 it('rejects an invalid create payload with RFC 7807 validation errors', function () {
     $this->postJson('/api/v1/leads', ['primary_email' => 'not-an-email'])
         ->assertStatus(422)

@@ -8,6 +8,7 @@ use App\Models\Lead;
 use App\Models\Metadata\OptionList;
 use App\Support\Api\ApiModuleRegistry;
 use App\Support\Api\ApiValidationRuleBuilder;
+use App\Support\FullName;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Validator;
 
@@ -128,20 +129,10 @@ final class IngestPipeline
             'lower' => strtolower($value),
             'upper' => strtoupper($value),
             'phone' => PhoneCleaner::clean($value),
-            'name_first' => $this->splitName($value)[0],
-            'name_last' => $this->splitName($value)[1],
+            'name_first' => FullName::split($value)[0],
+            'name_last' => FullName::split($value)[1],
             default => $value,
         };
-    }
-
-    /**
-     * @return array{0: string, 1: string}
-     */
-    private function splitName(string $value): array
-    {
-        $parts = preg_split('/\s+/', trim($value), 2) ?: [];
-
-        return [$parts[0] ?? '', $parts[1] ?? ''];
     }
 
     /**
