@@ -54,6 +54,11 @@ class MetadataFixtureSeeder extends Seeder
         );
 
         $this->field($leads, 'full_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
+        // Z-5.6: full_name has no real column or mutator (Contactable::fullName()
+        // is a plain read-only method, not an Eloquent accessor/mutator) — the
+        // ingest pipeline (and any other writer) needs the real columns registered.
+        $this->field($leads, 'first_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 100]);
+        $this->field($leads, 'last_name', 'text', ['filterable' => true, 'sortable' => true, 'max_length' => 100]);
         $this->field($leads, 'vertical', 'enum', ['filterable' => true, 'sortable' => true, 'option_list_id' => $vertical->id]);
         $this->field($leads, 'stage', 'enum', ['filterable' => true, 'sortable' => true, 'option_list_id' => $stage->id]);
         $this->field($leads, 'primary_email', 'email', ['filterable' => true, 'sortable' => true, 'max_length' => 255]);
