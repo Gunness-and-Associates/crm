@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Support\Etl\CompanyTransformer;
+use App\Support\Etl\LeadModuleSpec;
+use App\Support\Etl\LeadModuleTransformer;
 use App\Support\Etl\LegacyTransformer;
 use App\Support\Etl\MigrationResult;
 use App\Support\Etl\UserTransformer;
@@ -36,9 +38,10 @@ final class MigrateLegacyCommand extends Command
         $transformers = [
             $users,
             $companies,
-            // Appended in load order as each is built: leads -> students ->
-            // assessments -> clients -> affiliates -> newsletter subscribers ->
-            // activities -> email addresses -> audit.
+            ...$this->leadModuleTransformers(),
+            // Appended in load order as each is built: students -> assessments ->
+            // clients -> affiliates -> newsletter subscribers -> activities ->
+            // email addresses -> audit.
         ];
 
         $only = $this->stringOption('only');
@@ -157,6 +160,234 @@ final class MigrateLegacyCommand extends Command
         foreach ($result->errors as $error) {
             $this->warn("  [{$result->key}:{$error['id']}] {$error['message']}");
         }
+    }
+
+    /**
+     * The 18 highest-value legacy lead modules (Z-6.2 part 1 — the 10 with a
+     * named reconciliation target in BACKEND_BRIEF §13, plus the dedup-group
+     * siblings that feed the same target: ga_immcan1/2/3 alongside ga_imm_can
+     * for "in-Canada", ga_bd2/ga_client_development1 alongside ga_bd1 for
+     * "BD1", and the full ga_lmia_* cluster for "LMIA course"). The remaining
+     * ~10 smaller/untargeted modules (ga_canadavisa, ga_pnp, ga_refugee_book,
+     * ga_entrepreneur, ga_resumes, ga_hqinvestor_, ga_gunnessassociates,
+     * ga_associates, ga_inland, ...) land in a follow-up pass.
+     *
+     * Within each dedup group the named-target table is registered LAST, so
+     * if a source id ever collided across sibling tables (none do in the
+     * audited local dataset — verified 2026-08-18), the more-authoritative
+     * table would win the overwrite rather than whichever happened to run
+     * last by chance.
+     *
+     * @return list<LeadModuleTransformer>
+     */
+    private function leadModuleTransformers(): array
+    {
+        return array_map(
+            fn (LeadModuleSpec $spec): LeadModuleTransformer => new LeadModuleTransformer($spec),
+            [
+                new LeadModuleSpec(
+                    key: 'leads_galead',
+                    table: 'ga_galead',
+                    cstmTable: 'ga_galead_cstm',
+                    emailBeanModule: 'GA_GALead',
+                    fixedVertical: null,
+                    verticalDeriveColumn: 'category_c',
+                    stageColumn: 'lead_status_c',
+                    hotLeadColumn: 'hot_lead_c',
+                    warmLeadColumn: 'warm_lead_c',
+                    verticalAttributeColumns: [
+                        'current_status_in_canada', 'afraid_to_return', 'current_situation', 'best_describes',
+                        'looking_to_start', 'interested_in_pr', 'invest_in_canada', 'start_your_pr_pathway',
+                        'interested_in', 'start_your_application', 'refugee_claim_process',
+                        'current_status_in_canada_h_c', 'seeking_a_humanitarian_pr_c', 'start_your_application_h_c',
+                        'best_time_to_call_c', 'best_time_to_call_r_c', 'best_time_to_call_bi_c',
+                        'best_time_to_call_ss_c', 'own_business_bi_c',
+                    ],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_imm_biz',
+                    table: 'ga_imm_biz',
+                    cstmTable: 'ga_imm_biz_cstm',
+                    emailBeanModule: 'GA_Imm_Biz',
+                    fixedVertical: 'BusinessImmigration',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'lead_status',
+                    hotLeadColumn: 'hot_lead_c',
+                    warmLeadColumn: 'warm_lead_c',
+                    declineReasonColumn: 'decline_reason_c',
+                    lastContactedAtColumn: 'last_contacted_at_c',
+                    verticalAttributeColumns: [
+                        'status', 'canadian_permanent_residency', 'estimated_investment_budget',
+                        'immigration_timeline', 'call_status_c', 'call_attempts_c', 'last_call_summary_c',
+                        'last_call_outcome_c', 'immigration_goal_c', 'net_worth_range_c',
+                    ],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_immcan1',
+                    table: 'ga_immcan1',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_ImmCan1',
+                    fixedVertical: 'InCanada',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status',
+                    verticalAttributeColumns: ['status_details', 'source', 'source_details', 'referred_by', 'campaign_id_c', 'opportunity_amount'],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_immcan2',
+                    table: 'ga_immcan2',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_ImmCan2',
+                    fixedVertical: 'InCanada',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status',
+                    verticalAttributeColumns: ['status_details', 'source', 'source_details', 'referred_by', 'campaign_id_c', 'opportunity_amount'],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_immcan3',
+                    table: 'ga_immcan3',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_ImmCan3',
+                    fixedVertical: 'InCanada',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status',
+                    verticalAttributeColumns: ['status_details', 'source', 'source_details', 'referred_by', 'campaign_id_c', 'opportunity_amount'],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_imm_can',
+                    table: 'ga_imm_can',
+                    cstmTable: 'ga_imm_can_cstm',
+                    emailBeanModule: 'GA_Imm_can',
+                    fixedVertical: 'InCanada',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status',
+                    hotLeadColumn: 'hot_lead_c',
+                    warmLeadColumn: 'warm_lead_c',
+                    verticalAttributeColumns: [
+                        'status_details', 'source', 'referred_by', 'referral_source', 'opportunity_amount',
+                        'occupation', 'marital_status', 'length_of_stay', 'help_type', 'date_of_birth',
+                        'campaign_id_c', 'source_details_c', 'date_of_birth2_c',
+                    ],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_usa',
+                    table: 'ga_usa',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_USA',
+                    fixedVertical: 'USA',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status',
+                    verticalAttributeColumns: ['help_type', 'cv', 'dob'],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_expressentryrequests',
+                    table: 'ga_expressentryrequests',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_ExpressEntryRequests',
+                    fixedVertical: 'ExpressEntry',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status',
+                    verticalAttributeColumns: ['status_details', 'source_details', 'source', 'referred_by', 'opportunity_amount', 'occupation', 'field_of_study', 'campaign_id_c'],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_studypermitrequests',
+                    table: 'ga_studypermitrequests',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_StudyPermitRequests',
+                    fixedVertical: 'StudyPermit',
+                    verticalDeriveColumn: null,
+                    stageColumn: null,
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_bd2',
+                    table: 'ga_bd2',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_BD2',
+                    fixedVertical: 'BusinessDevelopment',
+                    verticalDeriveColumn: null,
+                    stageColumn: null,
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_client_development1',
+                    table: 'ga_client_development1',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_Client_Development1',
+                    fixedVertical: 'BusinessDevelopment',
+                    verticalDeriveColumn: null,
+                    stageColumn: null,
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_bd1',
+                    table: 'ga_bd1',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_BD1',
+                    fixedVertical: 'BusinessDevelopment',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status',
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_applicant',
+                    table: 'ga_applicant',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_Applicant',
+                    fixedVertical: 'General',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status',
+                    verticalAttributeColumns: ['job_applied_for'],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_study',
+                    table: 'ga_study',
+                    cstmTable: 'ga_study_cstm',
+                    emailBeanModule: 'GA_Study',
+                    fixedVertical: 'StudyPermit',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status',
+                    verticalAttributeColumns: [
+                        'qualified', 'program_interest', 'preferred_study_level', 'institution_type',
+                        'highest_education_completed', 'field_of_study', 'active_leads', 'dob',
+                    ],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_lmiainquiry',
+                    table: 'ga_lmiainquiry',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_LMIAInquiry',
+                    fixedVertical: 'LMIA',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status',
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_lmia_affiliate',
+                    table: 'lmia_affiliate',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_LMIA_Affiliate',
+                    fixedVertical: 'LMIA',
+                    verticalDeriveColumn: null,
+                    stageColumn: null,
+                    verticalAttributeColumns: ['affiliate_link', 'username'],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_lmia_main',
+                    table: 'ga_lmia_main',
+                    cstmTable: 'ga_lmia_main_cstm',
+                    emailBeanModule: 'GA_LMIA_MAIN',
+                    fixedVertical: 'LMIA',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status_c',
+                    verticalAttributeColumns: ['commission', 'ga_affiliate_id_c', 'username_c', 'amount_c'],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_lmia_course',
+                    table: 'ga_lmia_course',
+                    cstmTable: 'ga_lmia_course_cstm',
+                    emailBeanModule: 'GA_LMIA_Course',
+                    fixedVertical: 'LMIA',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status_c',
+                    verticalAttributeColumns: ['country', 'have_invest_c'],
+                ),
+            ],
+        );
     }
 
     private function stringOption(string $name): ?string
