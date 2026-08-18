@@ -3,6 +3,7 @@
 namespace App\Support\Etl;
 
 use App\Models\User;
+use App\Support\Etl\Concerns\DisambiguatesUniqueColumn;
 use App\Support\Etl\Concerns\NormalizesLegacyValues;
 use App\Support\Etl\Concerns\RecoversLegacyEmail;
 use Illuminate\Database\Query\Builder;
@@ -16,6 +17,7 @@ use Illuminate\Support\Str;
  */
 final class UserTransformer implements LegacyTransformer
 {
+    use DisambiguatesUniqueColumn;
     use NormalizesLegacyValues;
     use RecoversLegacyEmail;
 
@@ -100,38 +102,6 @@ final class UserTransformer implements LegacyTransformer
      */
     private function usernameOverrides(): array
     {
-        if ($this->usernameOverrides !== null) {
-            return $this->usernameOverrides;
-        }
-
-        $groups = DB::connection('legacy')->table('users')
-            ->select(['id', 'user_name', 'deleted', 'date_modified'])
-            ->whereNotNull('user_name')
-            ->where('user_name', '!=', '')
-            ->get()
-            ->groupBy('user_name');
-
-        $overrides = [];
-        foreach ($groups as $username => $rows) {
-            if ($rows->count() < 2) {
-                continue;
-            }
-
-            $sorted = $rows->sortBy([
-                ['deleted', 'asc'],
-                ['date_modified', 'desc'],
-            ]);
-            $winner = $sorted->first();
-            $winnerId = $winner === null ? null : $this->stringValue($winner->id);
-
-            foreach ($rows as $row) {
-                $rowId = $this->stringValue($row->id);
-                if ($rowId !== '' && $rowId !== $winnerId) {
-                    $overrides[$rowId] = sprintf('%s-%s', $this->stringValue($username), substr($rowId, 0, 8));
-                }
-            }
-        }
-
-        return $this->usernameOverrides = $overrides;
+        return $this->usernameOverrides ??= $this->uniqueColumnOverrides('users', 'user_name');
     }
 }
