@@ -51,4 +51,32 @@ final class LegacyDate
 
         return $parsed;
     }
+
+    /**
+     * For business-date fields (dob, ...) rather than audit-trail timestamps
+     * — unlike parse()/parseDate(), a handful of source rows store these in
+     * `m/d/Y` instead of the usual `Y-m-d` (confirmed on ga_clients.dob), so
+     * this tries both rather than rejecting the whole row over one field's
+     * format. Still returns null (not a guess) if neither matches.
+     */
+    public static function parseFlexibleDate(?string $value): ?Carbon
+    {
+        if ($value === null || $value === '' || str_starts_with($value, '0000-00-00')) {
+            return null;
+        }
+
+        foreach (['Y-m-d', 'm/d/Y'] as $format) {
+            try {
+                $parsed = Carbon::createFromFormat($format, $value, 'UTC');
+            } catch (\InvalidArgumentException) {
+                continue;
+            }
+
+            if ($parsed !== null && $parsed->format($format) === $value) {
+                return $parsed;
+            }
+        }
+
+        return null;
+    }
 }
