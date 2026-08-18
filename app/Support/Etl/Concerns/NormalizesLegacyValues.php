@@ -28,6 +28,25 @@ trait NormalizesLegacyValues
     }
 
     /**
+     * A handful of legacy `created_by`/`modified_user_id`-style FK columns hold
+     * free text ("Prince Saha", an email address) instead of a real user id —
+     * a data-quality defect, not a real reference. Treat anything that isn't
+     * UUID-shaped as absent rather than letting it hit the target's foreign
+     * key constraint and fail the whole row.
+     */
+    private function nullableUuid(mixed $value): ?string
+    {
+        $string = $this->nullableString($value);
+        if ($string === null) {
+            return null;
+        }
+
+        return preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $string) === 1
+            ? $string
+            : null;
+    }
+
+    /**
      * Several `_cstm` "boolean" columns are actually varchar, not tinyint — an
      * empty string or a literal "0"/"false"/"no" (case-insensitive) is false,
      * anything else non-empty is true.

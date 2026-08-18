@@ -101,9 +101,13 @@ final class CompanyTransformer implements LegacyTransformer
             'date_reviewed' => LegacyDate::parseDate($this->nullableString($row['date_reviewed'] ?? null)),
             'lawful_basis_source' => $this->nullableString($row['lawful_basis_source'] ?? null),
             'primary_email' => $this->recoverEmail($id, 'GA_Companies') ?? $this->nullableString($row['email1_c'] ?? null),
-            'assigned_user_id' => $this->nullableString($row['assigned_user_id'] ?? null),
-            'created_by' => $this->nullableString($row['created_by'] ?? null),
-            'modified_by' => $this->nullableString($row['modified_user_id'] ?? null),
+            // A few thousand rows carry free text ("Prince Saha", an email
+            // address) in what should be a user-id FK — real values, but not
+            // real references. Drop those rather than failing the entire
+            // company row over an unusable audit-trail field.
+            'assigned_user_id' => $this->nullableUuid($row['assigned_user_id'] ?? null),
+            'created_by' => $this->nullableUuid($row['created_by'] ?? null),
+            'modified_by' => $this->nullableUuid($row['modified_user_id'] ?? null),
             'rating' => $this->nullableInt($row['rating'] ?? null),
             'lmia' => $this->nullableString($row['lmia'] ?? null),
             'jobpostlink' => $this->nullableString($row['jobpostlink'] ?? null),

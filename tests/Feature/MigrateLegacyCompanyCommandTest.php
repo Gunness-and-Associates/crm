@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Company;
+use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -195,6 +196,31 @@ it('sets deleted_at from date_modified when deleted=1', function () {
     $company = Company::withoutGlobalScopes()->find('legacy-company-1');
     expect($company->deleted_at)->not->toBeNull()
         ->and($company->deleted_at->format('Y-m-d H:i:s'))->toBe('2025-06-15 10:30:00');
+});
+
+it('nulls out a created_by/assigned_user_id/modified_by that is not UUID-shaped', function () {
+    insertLegacyCompany([
+        'assigned_user_id' => 'Prince Saha',
+        'created_by' => 'jonathan dias',
+        'modified_user_id' => 'carla@immigrationmatters.info',
+    ]);
+
+    $this->artisan('crm:migrate-legacy', ['--only' => 'companies'])->assertExitCode(0);
+
+    $company = Company::withoutGlobalScopes()->find('legacy-company-1');
+    expect($company)->not->toBeNull()
+        ->and($company->assigned_user_id)->toBeNull()
+        ->and($company->created_by)->toBeNull()
+        ->and($company->modified_by)->toBeNull();
+});
+
+it('keeps a genuinely UUID-shaped created_by that resolves to a real user', function () {
+    $user = User::factory()->create();
+    insertLegacyCompany(['created_by' => $user->id]);
+
+    $this->artisan('crm:migrate-legacy', ['--only' => 'companies'])->assertExitCode(0);
+
+    expect(Company::withoutGlobalScopes()->find('legacy-company-1')->created_by)->toBe($user->id);
 });
 
 it('re-runs idempotently without duplicating the row', function () {
