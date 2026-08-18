@@ -3,6 +3,8 @@
 namespace App\Support\Etl;
 
 use App\Models\User;
+use App\Support\Etl\Concerns\NormalizesLegacyValues;
+use App\Support\Etl\Concerns\RecoversLegacyEmail;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -14,6 +16,9 @@ use Illuminate\Support\Str;
  */
 final class UserTransformer implements LegacyTransformer
 {
+    use NormalizesLegacyValues;
+    use RecoversLegacyEmail;
+
     public function key(): string
     {
         return 'users';
@@ -58,7 +63,7 @@ final class UserTransformer implements LegacyTransformer
         // (38 of 74 in the audited source) gets an obviously-fake placeholder in
         // the reserved .invalid TLD (RFC 2606) rather than failing to migrate
         // the account at all.
-        $email = $this->recoverEmail($id) ?? sprintf('%s@migrated.invalid', $username ?? $id);
+        $email = $this->recoverEmail($id, 'Users') ?? sprintf('%s@migrated.invalid', $username ?? $id);
 
         return [
             'id' => $id,
@@ -75,35 +80,5 @@ final class UserTransformer implements LegacyTransformer
             'locale' => 'en',
             'timezone' => 'UTC',
         ];
-    }
-
-    /**
-     * BACKEND_BRIEF §13's email recovery query, scoped to bean_module='Users'.
-     */
-    private function recoverEmail(string $userId): ?string
-    {
-        $email = DB::connection('legacy')
-            ->table('email_addr_bean_rel')
-            ->join('email_addresses', 'email_addresses.id', '=', 'email_addr_bean_rel.email_address_id')
-            ->where('email_addr_bean_rel.bean_id', $userId)
-            ->where('email_addr_bean_rel.bean_module', 'Users')
-            ->where('email_addr_bean_rel.deleted', 0)
-            ->where('email_addresses.deleted', 0)
-            ->orderByDesc('email_addr_bean_rel.primary_address')
-            ->value('email_addresses.email_address');
-
-        return $this->nullableString($email);
-    }
-
-    private function stringValue(mixed $value): string
-    {
-        return is_string($value) || is_numeric($value) ? (string) $value : '';
-    }
-
-    private function nullableString(mixed $value): ?string
-    {
-        $string = $this->stringValue($value);
-
-        return $string === '' ? null : $string;
     }
 }

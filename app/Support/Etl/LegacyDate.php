@@ -30,4 +30,25 @@ final class LegacyDate
 
         return $parsed;
     }
+
+    /**
+     * For a source column typed `date` rather than `datetime` (e.g.
+     * date_reviewed) — same zero-date/error handling, `Y-m-d` instead.
+     *
+     * @throws \InvalidArgumentException if $value is non-empty but not Y-m-d
+     *                                   and not the zero-date
+     */
+    public static function parseDate(?string $value): ?Carbon
+    {
+        if ($value === null || $value === '' || str_starts_with($value, '0000-00-00')) {
+            return null;
+        }
+
+        $parsed = Carbon::createFromFormat('Y-m-d', $value, 'UTC');
+        if ($parsed === null || $parsed->format('Y-m-d') !== $value) {
+            throw new \InvalidArgumentException("Legacy date [{$value}] is not Y-m-d.");
+        }
+
+        return $parsed;
+    }
 }
