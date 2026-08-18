@@ -119,6 +119,24 @@ it('dry-run reports counts and writes nothing', function () {
     expect(User::find('legacy-user-4'))->toBeNull();
 });
 
+it('disambiguates a duplicate username so both rows migrate, keeping the plain name on the non-deleted/most-recent one', function () {
+    DB::connection('legacy')->table('users')->insert([
+        [
+            'id' => 'api-user-stale', 'user_name' => 'api_user', 'status' => 'Inactive',
+            'deleted' => true, 'is_admin' => false,
+        ],
+        [
+            'id' => 'api-user-active', 'user_name' => 'api_user', 'status' => 'Active',
+            'deleted' => false, 'is_admin' => true,
+        ],
+    ]);
+
+    $this->artisan('crm:migrate-legacy', ['--only' => 'users'])->assertExitCode(0);
+
+    expect(User::find('api-user-active')->username)->toBe('api_user')
+        ->and(User::find('api-user-stale')->username)->toBe('api_user-api-user');
+});
+
 it('resumes from --from-id', function () {
     DB::connection('legacy')->table('users')->insert([
         ['id' => 'a-legacy-user', 'user_name' => 'a', 'is_admin' => false, 'status' => 'Active', 'deleted' => false],
