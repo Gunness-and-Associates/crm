@@ -39,6 +39,7 @@ final class MigrateLegacyCommand extends Command
             $users,
             $companies,
             ...$this->leadModuleTransformers(),
+            ...$this->remainingLeadModuleTransformers(),
             // Appended in load order as each is built: students -> assessments ->
             // clients -> affiliates -> newsletter subscribers -> activities ->
             // email addresses -> audit.
@@ -385,6 +386,129 @@ final class MigrateLegacyCommand extends Command
                     verticalDeriveColumn: null,
                     stageColumn: 'status_c',
                     verticalAttributeColumns: ['country', 'have_invest_c'],
+                ),
+            ],
+        );
+    }
+
+    /**
+     * The remaining ~10 smaller/untargeted legacy lead modules (Z-6.2 part 2)
+     * — none of these have a named reconciliation target in BACKEND_BRIEF
+     * §13, unlike the 18 in leadModuleTransformers().
+     *
+     * @return list<LeadModuleTransformer>
+     */
+    private function remainingLeadModuleTransformers(): array
+    {
+        return array_map(
+            fn (LeadModuleSpec $spec): LeadModuleTransformer => new LeadModuleTransformer($spec),
+            [
+                new LeadModuleSpec(
+                    key: 'leads_canadavisa',
+                    table: 'ga_canadavisa',
+                    cstmTable: 'ga_canadavisa_cstm',
+                    emailBeanModule: 'GA_CanadaVisa',
+                    fixedVertical: 'CanadaVisa',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status_c',
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_new_pnp_form',
+                    table: 'ga_new_pnp_form',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_New_PNP_Form',
+                    fixedVertical: 'PNP',
+                    verticalDeriveColumn: null,
+                    stageColumn: null,
+                    // Raw webform capture fields, kept for traceability even
+                    // though lbl_phone/lbl_email duplicate the base columns.
+                    verticalAttributeColumns: ['name', 'lbl_phone', 'lbl_lname', 'lbl_hearabout', 'lbl_email', 'lbl_country'],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_pnp',
+                    table: 'ga_pnp',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_PNP',
+                    fixedVertical: 'PNP',
+                    verticalDeriveColumn: null,
+                    stageColumn: null,
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_refugee_book',
+                    table: 'ga_refugee_book',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_Refugee_Book',
+                    fixedVertical: 'Refugee',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status',
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_entrepreneur',
+                    table: 'ga_entrepreneur',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_Entrepreneur',
+                    fixedVertical: 'Entrepreneur',
+                    verticalDeriveColumn: null,
+                    stageColumn: null,
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_resumes',
+                    table: 'ga_resumes',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_Resumes',
+                    fixedVertical: 'Resume',
+                    verticalDeriveColumn: null,
+                    // status_id is a numeric FK to a lookup table, not a
+                    // status label — canonicalising it against lead_stage
+                    // would never match, so it stays raw in
+                    // vertical_attributes instead of driving `stage`.
+                    stageColumn: null,
+                    verticalAttributeColumns: [
+                        'document_name', 'filename', 'file_ext', 'file_mime_type', 'active_date',
+                        'exp_date', 'category_id', 'subcategory_id', 'status_id', 'category',
+                    ],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_hqinvestor',
+                    table: 'ga_hqinvestor_',
+                    cstmTable: 'ga_hqinvestor__cstm',
+                    emailBeanModule: 'GA_HQInvestor_',
+                    fixedVertical: 'Investor',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status',
+                    hotLeadColumn: 'hot_lead_c',
+                    warmLeadColumn: 'warm_lead_c',
+                    verticalAttributeColumns: ['participate', 'source'],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_gunnessassociates',
+                    table: 'ga_gunnessassociates',
+                    cstmTable: 'ga_gunnessassociates_cstm',
+                    emailBeanModule: 'GA_GunnessAssociates',
+                    fixedVertical: 'General',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status',
+                    hotLeadColumn: 'hot_lead_c',
+                    warmLeadColumn: 'warm_lead_c',
+                    verticalAttributeColumns: ['help_type', 'source'],
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_associates',
+                    table: 'ga_associates',
+                    cstmTable: 'ga_associates_cstm',
+                    emailBeanModule: 'GA_Associates',
+                    fixedVertical: 'General',
+                    verticalDeriveColumn: null,
+                    stageColumn: 'status_c',
+                ),
+                new LeadModuleSpec(
+                    key: 'leads_inland',
+                    table: 'ga_inland',
+                    cstmTable: null,
+                    emailBeanModule: 'GA_Inland',
+                    fixedVertical: 'InCanada',
+                    verticalDeriveColumn: null,
+                    stageColumn: null,
                 ),
             ],
         );
