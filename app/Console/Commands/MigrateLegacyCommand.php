@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Support\Etl\CompanyTransformer;
 use App\Support\Etl\LegacyTransformer;
 use App\Support\Etl\MigrationResult;
 use App\Support\Etl\UserTransformer;
@@ -29,14 +30,15 @@ final class MigrateLegacyCommand extends Command
 
     private const BATCH_SIZE = 500;
 
-    public function handle(UserTransformer $users): int
+    public function handle(UserTransformer $users, CompanyTransformer $companies): int
     {
         /** @var list<LegacyTransformer> $transformers */
         $transformers = [
             $users,
-            // Appended in load order as each is built: option lists -> companies ->
-            // leads -> students -> assessments -> clients -> affiliates ->
-            // newsletter subscribers -> activities -> email addresses -> audit.
+            $companies,
+            // Appended in load order as each is built: leads -> students ->
+            // assessments -> clients -> affiliates -> newsletter subscribers ->
+            // activities -> email addresses -> audit.
         ];
 
         $only = $this->stringOption('only');
