@@ -116,7 +116,9 @@ it('derives vertical from category_c for GA_GALead and keeps unmodelled fields i
         ->and($lead->hot_lead)->toBeTrue()
         ->and($lead->warm_lead)->toBeFalse()
         ->and($lead->source)->toBe('ga_galead')
-        ->and($lead->vertical_attributes)->toBe([
+        // toEqual, not toBe: MySQL's native JSON type does not guarantee key
+        // order on storage (unlike MariaDB's LONGTEXT-backed JSON).
+        ->and($lead->vertical_attributes)->toEqual([
             'current_status_in_canada' => 'visitor',
             'best_time_to_call' => 'evening',
         ]);
@@ -147,7 +149,7 @@ it('maps GA_Imm_Biz onto the fixed BusinessImmigration vertical and real decline
         ->and($lead->stage->value)->toBe('converted')
         ->and($lead->decline_reason)->toBe('Not qualified')
         ->and($lead->last_contacted_at->format('Y-m-d H:i:s'))->toBe('2026-01-15 10:00:00')
-        ->and($lead->vertical_attributes)->toBe([
+        ->and($lead->vertical_attributes)->toEqual([
             'immigration_timeline' => '6 months',
             'call_status' => 'Left voicemail',
             'call_attempts' => '3',
