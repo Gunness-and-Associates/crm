@@ -14,6 +14,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * Post-conversion client lifecycle (source ga_clients + ga_clientdevelopment2/3
@@ -46,8 +48,9 @@ use Illuminate\Support\Carbon;
  * @property string|null $fee_status
  * @property Carbon|null $next_action_at
  */
-class Client extends Model implements Aclable
+class Client extends Model implements Aclable, AuditableContract
 {
+    use Auditable;
     use Contactable;
     use HasAcl;
     use HasActivities;

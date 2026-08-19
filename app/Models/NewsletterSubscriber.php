@@ -14,6 +14,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * Simple subscriber list (source ga_newsletter_subscriber, ~2,023 rows).
@@ -25,8 +27,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $opted_out_at
  * @property string|null $unsubscribe_reason
  */
-class NewsletterSubscriber extends Model implements Aclable
+class NewsletterSubscriber extends Model implements Aclable, AuditableContract
 {
+    use Auditable;
     use Contactable;
     use HasAcl;
     use HasActivities;

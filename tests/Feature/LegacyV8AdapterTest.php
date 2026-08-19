@@ -28,6 +28,26 @@ it('issues a real token at the legacy /public/Api/access_token alias', function 
     $response->assertOk()->assertJsonStructure(['access_token', 'token_type', 'expires_in']);
 });
 
+it('rate-limits the legacy access_token alias like every other /public/Api route', function () {
+    $client = app(ClientRepository::class)->createClientCredentialsGrantClient('n8n');
+
+    // Z-7.1: this alias previously had no throttle middleware at all --
+    // a second, unthrottled entry point for brute-forcing client credentials
+    // alongside the throttled primary /oauth/token endpoint. ApiThrottle adds
+    // these headers unconditionally, so their presence proves the middleware
+    // now actually runs on this route (not just registered somewhere unused).
+    $response = $this->post('/public/Api/access_token', [
+        'grant_type' => 'client_credentials',
+        'client_id' => $client->id,
+        'client_secret' => $client->plainSecret,
+    ]);
+
+    $response->assertOk()
+        ->assertHeader('X-RateLimit-Limit')
+        ->assertHeader('X-RateLimit-Remaining')
+        ->assertHeader('X-RateLimit-Reset');
+});
+
 it('returns 410 gone for dt_sms with the exact contract message', function () {
     actingAsApiUser(User::factory()->create(['is_admin' => true]));
 
