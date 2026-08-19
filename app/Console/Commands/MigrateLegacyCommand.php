@@ -7,14 +7,19 @@ use App\Support\Etl\AffiliateTransformer;
 use App\Support\Etl\AssessmentRequestTransformer;
 use App\Support\Etl\AssessmentScoreTransformer;
 use App\Support\Etl\BareContactableTransformer;
+use App\Support\Etl\CallTransformer;
 use App\Support\Etl\ClientDevelopment2Transformer;
 use App\Support\Etl\ClientTransformer;
 use App\Support\Etl\CompanyTransformer;
+use App\Support\Etl\DocumentRevisionTransformer;
+use App\Support\Etl\DocumentTransformer;
 use App\Support\Etl\LeadModuleSpec;
 use App\Support\Etl\LeadModuleTransformer;
 use App\Support\Etl\LegacyTransformer;
+use App\Support\Etl\MeetingTransformer;
 use App\Support\Etl\MigrationResult;
 use App\Support\Etl\NewsletterSubscriberTransformer;
+use App\Support\Etl\NoteTransformer;
 use App\Support\Etl\StudentTransformer;
 use App\Support\Etl\UserTransformer;
 use Illuminate\Console\Command;
@@ -51,6 +56,11 @@ final class MigrateLegacyCommand extends Command
         ClientDevelopment2Transformer $clientsDevelopment2,
         AffiliateTransformer $affiliates,
         NewsletterSubscriberTransformer $newsletterSubscribers,
+        NoteTransformer $notes,
+        CallTransformer $calls,
+        MeetingTransformer $meetings,
+        DocumentTransformer $documents,
+        DocumentRevisionTransformer $documentRevisions,
     ): int {
         /** @var list<LegacyTransformer> $transformers */
         $transformers = [
@@ -67,7 +77,12 @@ final class MigrateLegacyCommand extends Command
             new BareContactableTransformer('clients_imm_client', 'ga_imm_client', 'GA_Imm_Client', Client::class),
             $affiliates,
             $newsletterSubscribers,
-            // Appended in load order as each is built: activities -> email
+            $notes,
+            $calls,
+            $meetings,
+            $documents,
+            $documentRevisions,
+            // Appended in load order as each is built: emails -> email
             // addresses -> audit.
         ];
 
