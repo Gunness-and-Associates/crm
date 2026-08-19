@@ -14,6 +14,7 @@ use App\Support\Api\ApiModuleRegistry;
 use App\Support\Api\ApiScopes;
 use App\Support\Api\ApiTrace;
 use App\Support\ContactableBlueprintMacro;
+use App\Support\Etl\LegacyViewDefReader;
 use App\Support\Livewire\SubdirectoryHandleRequests;
 use App\Support\MetadataRepository;
 use App\Support\RuntimeMailConfigurator;
@@ -43,6 +44,14 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(SchemaManager::class);
         $this->app->singleton(Acl::class);
         $this->app->scoped(ApiTrace::class);
+
+        // Local-only path to the legacy SuiteCRM install's public/legacy
+        // directory (config/etl.php) -- never present in CI or production.
+        $this->app->singleton(LegacyViewDefReader::class, function (): LegacyViewDefReader {
+            $root = config('etl.legacy_php_root');
+
+            return new LegacyViewDefReader(is_string($root) && $root !== '' ? $root : null);
+        });
 
         // The app may be served from a sub-directory (e.g. XAMPP Apache at
         // /newcrmga/public) rather than a vhost root — see SubdirectoryHandleRequests.

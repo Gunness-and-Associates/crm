@@ -3,13 +3,16 @@
 namespace App\Console\Commands;
 
 use App\Models\Metadata\Field;
+use App\Models\Metadata\Layout;
 use App\Models\Metadata\Module;
+use App\Support\Etl\LegacyViewDefReader;
 use App\Support\SchemaManager\FieldChangeRequest;
 use App\Support\SchemaManager\SchemaManager;
 use App\Support\SchemaManager\SchemaValidationException;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * BACKEND_BRIEF §13 / Z-6.3 — imports legacy Studio custom fields (the
@@ -45,7 +48,7 @@ use Illuminate\Support\Facades\DB;
  */
 final class ImportStudioMetadataCommand extends Command
 {
-    protected $signature = 'crm:import-studio-metadata {--dry-run}';
+    protected $signature = 'crm:import-studio-metadata {--dry-run} {--only=}';
 
     protected $description = 'Import legacy Studio custom fields (fields_meta_data) into the metadata registry (BACKEND_BRIEF §13/Z-6.3)';
 
@@ -126,15 +129,69 @@ final class ImportStudioMetadataCommand extends Command
         'companies.recruiter_c' => ['fieldName' => 'recruiter_id', 'idColumn' => 'user_id_c', 'relatedModuleKey' => 'users', 'relatedDisplayField' => 'name'],
     ];
 
-    public function __construct(private readonly SchemaManager $schemaManager)
-    {
+    /**
+     * Target module -> the ONE legacy module whose view-defs describe it.
+     * Deliberately excludes every consolidated entity (leads: 23 source GA_*
+     * modules; assessments: 2) -- there is no single legacy view-def to
+     * import for those, and Leads already has a hand-curated layout from
+     * Z-1.5 for exactly that reason. Only entities with a clean 1:1 legacy
+     * source module are covered here.
+     *
+     * @var array<string, string>
+     */
+    private const LEGACY_MODULE_BY_TARGET_MODULE = [
+        'companies' => 'GA_Companies',
+        'affiliates' => 'GA_Affiliate',
+        'students' => 'GA_HQ_Students',
+        'clients' => 'GA_Clients',
+        'newsletter_subscribers' => 'GA_Newsletter_Subscriber',
+    ];
+
+    /**
+     * Legacy view-def column/field names that don't match a real target
+     * field name directly or after stripping a trailing `_c`, verified
+     * against the real legacy files and this app's registered Contactable
+     * base fields (2026-08-19). `name` -> `full_name` is SuiteCRM's own
+     * "Name" list-view column, backed here by the same virtual field every
+     * Contactable module already registers (see MetadataFixtureSeeder).
+     *
+     * @var array<string, string>
+     */
+    private const NAME_ALIASES = [
+        'name' => 'full_name',
+        'email1' => 'primary_email',
+        'email' => 'primary_email',
+        'date_entered' => 'created_at',
+        'date_modified' => 'updated_at',
+        'created_by_name' => 'created_by',
+        'assigned_user_name' => 'assigned_user_id',
+        'address_street' => 'primary_address_street',
+        'address_city' => 'primary_address_city',
+        'address_state' => 'primary_address_state',
+        'address_postalcode' => 'primary_address_postalcode',
+        'address_country' => 'primary_address_country',
+    ];
+
+    public function __construct(
+        private readonly SchemaManager $schemaManager,
+        private readonly LegacyViewDefReader $viewDefReader,
+    ) {
         parent::__construct();
     }
 
     public function handle(): int
     {
         $dryRun = (bool) $this->option('dry-run');
+        $only = $this->stringOption('only');
 
+        $fieldsOk = $only === null || $only === 'fields' ? $this->importFields($dryRun) : true;
+        $layoutsOk = $only === null || $only === 'layouts' ? $this->importLayouts($dryRun) : true;
+
+        return $fieldsOk && $layoutsOk ? self::SUCCESS : self::FAILURE;
+    }
+
+    private function importFields(bool $dryRun): bool
+    {
         // Not gated on $dryRun: this registers our OWN metadata Module row
         // (no legacy data touched), a prerequisite the two relate fields'
         // related_module_id needs to validate at all -- without it, even a
@@ -180,12 +237,240 @@ final class ImportStudioMetadataCommand extends Command
         }
 
         $prefix = $dryRun ? '[dry-run] ' : '';
-        $this->info(sprintf('%sstudio_metadata: created=%d skipped=%d errors=%d', $prefix, $created, $skipped, count($errors)));
+        $this->info(sprintf('%sstudio_metadata_fields: created=%d skipped=%d errors=%d', $prefix, $created, $skipped, count($errors)));
         foreach ($errors as $error) {
             $this->warn("  {$error}");
         }
 
-        return $errors === [] ? self::SUCCESS : self::FAILURE;
+        return $errors === [];
+    }
+
+    private function importLayouts(bool $dryRun): bool
+    {
+        $created = 0;
+        $skipped = 0;
+
+        foreach (self::LEGACY_MODULE_BY_TARGET_MODULE as $moduleKey => $legacyModule) {
+            $module = Module::query()->where('key', $moduleKey)->first();
+            if (! $module instanceof Module) {
+                continue;
+            }
+
+            $realFieldNames = $this->stringList(Field::query()->where('module_id', $module->id)->pluck('name')->all());
+
+            foreach ($this->buildLayouts($legacyModule, $realFieldNames) as $view => $definition) {
+                $definition['module'] = $moduleKey;
+
+                $exists = Layout::query()->where('module_id', $module->id)->where('view', $view)->exists();
+                if ($exists) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                if (! $dryRun) {
+                    Layout::query()->create([
+                        'module_id' => $module->id,
+                        'view' => $view,
+                        // Mechanically translated, never hand-reviewed -- never
+                        // published as if it were a curated, approved layout.
+                        'definition' => $definition,
+                        'version' => 1,
+                        'is_published' => false,
+                    ]);
+                }
+                $created++;
+            }
+        }
+
+        $prefix = $dryRun ? '[dry-run] ' : '';
+        $this->info(sprintf('%sstudio_metadata_layouts: created=%d skipped=%d', $prefix, $created, $skipped));
+
+        return true;
+    }
+
+    /**
+     * @param  list<string>  $realFieldNames
+     * @return array<string, array<string, mixed>> view => layout.schema.json content (module key not yet set)
+     */
+    private function buildLayouts(string $legacyModule, array $realFieldNames): array
+    {
+        $layouts = [];
+
+        $list = $this->buildColumns($this->viewDefReader->listView($legacyModule) ?? [], $realFieldNames);
+        if ($list !== null) {
+            $layouts['list'] = ['version' => 1, 'view' => 'list', 'content' => $list];
+        }
+
+        $search = $this->buildColumns($this->viewDefReader->searchView($legacyModule) ?? [], $realFieldNames);
+        if ($search !== null) {
+            $layouts['search'] = ['version' => 1, 'view' => 'search', 'content' => $search];
+        }
+
+        $detail = $this->buildPanels($this->viewDefReader->detailView($legacyModule) ?? [], $realFieldNames);
+        if ($detail !== null) {
+            $layouts['detail'] = ['version' => 1, 'view' => 'detail', 'content' => $detail];
+        }
+
+        $edit = $this->buildPanels($this->viewDefReader->editView($legacyModule) ?? [], $realFieldNames);
+        if ($edit !== null) {
+            $layouts['edit'] = ['version' => 1, 'view' => 'edit', 'content' => $edit];
+        }
+
+        return $layouts;
+    }
+
+    /**
+     * List/search views: a flat dict keyed by column/field name.
+     *
+     * @param  array<string, mixed>  $rawColumns
+     * @param  list<string>  $realFieldNames
+     * @return array<string, mixed>|null
+     */
+    private function buildColumns(array $rawColumns, array $realFieldNames): ?array
+    {
+        $columns = [];
+        $linkAssigned = false;
+
+        foreach ($rawColumns as $key => $rawDef) {
+            if (! is_array($rawDef)) {
+                continue;
+            }
+
+            $field = $this->resolveFieldName((string) $key, $realFieldNames);
+            if ($field === null) {
+                continue;
+            }
+
+            $column = ['field' => $field, 'priority' => ($rawDef['default'] ?? false) === true ? 1 : 3];
+            if (($rawDef['link'] ?? false) === true && ! $linkAssigned) {
+                $column['link'] = true;
+                $linkAssigned = true;
+            }
+
+            $columns[] = $column;
+        }
+
+        return $columns === [] ? null : ['columns' => $columns];
+    }
+
+    /**
+     * Detail/edit views: a dict of panel key -> list of rows, each row a
+     * list of 1-2 field-slot dicts -- already the same shape
+     * layout.schema.json's `panels[].rows` expects, so this only needs to
+     * resolve field names and drop anything unresolved (dropping an empty
+     * row, then an empty panel, when everything inside it was unresolved).
+     *
+     * @param  array<string, mixed>  $rawPanels
+     * @param  list<string>  $realFieldNames
+     * @return array<string, mixed>|null
+     */
+    private function buildPanels(array $rawPanels, array $realFieldNames): ?array
+    {
+        $panels = [];
+        $order = 0;
+
+        foreach ($rawPanels as $panelKey => $rawRows) {
+            if ($panelKey === 'templateMeta' || ! is_array($rawRows)) {
+                continue;
+            }
+
+            $rows = [];
+            foreach ($rawRows as $rawRow) {
+                if (! is_array($rawRow)) {
+                    continue;
+                }
+
+                $slots = [];
+                foreach ($rawRow as $rawSlot) {
+                    if (! is_array($rawSlot) || ! isset($rawSlot['name']) || ! is_string($rawSlot['name'])) {
+                        continue;
+                    }
+
+                    $field = $this->resolveFieldName($rawSlot['name'], $realFieldNames);
+                    if ($field !== null) {
+                        $slots[] = ['field' => $field];
+                    }
+                }
+
+                if ($slots !== [] && count($slots) <= 2) {
+                    $rows[] = $slots;
+                }
+            }
+
+            if ($rows === []) {
+                continue;
+            }
+
+            $panels[] = [
+                'key' => $this->panelKey((string) $panelKey),
+                'label' => $this->panelLabel((string) $panelKey),
+                'order' => $order++,
+                'rows' => $rows,
+            ];
+        }
+
+        return $panels === [] ? null : ['panels' => $panels];
+    }
+
+    /**
+     * @param  list<string>  $realFieldNames
+     */
+    private function resolveFieldName(string $legacyName, array $realFieldNames): ?string
+    {
+        $lower = strtolower($legacyName);
+        if (in_array($lower, $realFieldNames, true)) {
+            return $lower;
+        }
+
+        $stripped = str_ends_with($lower, '_c') ? substr($lower, 0, -2) : $lower;
+        if ($stripped !== $lower && in_array($stripped, $realFieldNames, true)) {
+            return $stripped;
+        }
+
+        $alias = self::NAME_ALIASES[$lower] ?? self::NAME_ALIASES[$stripped] ?? null;
+
+        return $alias !== null && in_array($alias, $realFieldNames, true) ? $alias : null;
+    }
+
+    private function panelKey(string $legacyPanelKey): string
+    {
+        $key = strtolower($legacyPanelKey);
+        $key = str_starts_with($key, 'lbl_') ? substr($key, 4) : $key;
+        $key = preg_replace('/[^a-z0-9_]/', '_', $key) ?? $key;
+
+        return $key === '' || ! preg_match('/^[a-z]/', $key) ? 'panel_'.$key : $key;
+    }
+
+    private function panelLabel(string $legacyPanelKey): string
+    {
+        $key = strtolower($legacyPanelKey);
+        $key = str_starts_with($key, 'lbl_') ? substr($key, 4) : $key;
+
+        return Str::of($key)->replace('_', ' ')->title()->toString();
+    }
+
+    private function stringOption(string $name): ?string
+    {
+        $value = $this->option($name);
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
+     * @param  array<mixed>  $values
+     * @return list<string>
+     */
+    private function stringList(array $values): array
+    {
+        $result = [];
+        foreach ($values as $value) {
+            if (is_string($value)) {
+                $result[] = $value;
+            }
+        }
+
+        return $result;
     }
 
     /**
