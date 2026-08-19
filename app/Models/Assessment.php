@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * Express Entry CRS/FSW calculator (source ga_assessment_request +
@@ -40,8 +42,9 @@ use Illuminate\Support\Carbon;
  * @property string|null $assigned_user_id
  * @property Carbon|null $assessed_at
  */
-class Assessment extends Model implements Aclable
+class Assessment extends Model implements Aclable, AuditableContract
 {
+    use Auditable;
     use HasAcl;
     use HasActivities;
     use HasCustomFields;

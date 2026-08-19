@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * Employer / recruiter directory (source ga_companies, ~21,000 rows).
@@ -34,8 +36,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property bool $hot_lead
  * @property bool $warm_lead
  */
-class Company extends Model implements Aclable
+class Company extends Model implements Aclable, AuditableContract
 {
+    use Auditable;
     use Contactable;
     use HasAcl;
     use HasActivities;

@@ -16,6 +16,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * Consolidates 23 source GA_* lead modules (BACKEND_BRIEF §7.4). Study Permit
@@ -32,8 +34,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $last_contacted_at
  * @property Carbon|null $next_follow_up_at
  */
-class Lead extends Model implements Aclable
+class Lead extends Model implements Aclable, AuditableContract
 {
+    use Auditable;
     use Contactable;
     use HasAcl;
     use HasActivities;

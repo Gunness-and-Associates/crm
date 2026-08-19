@@ -26,7 +26,12 @@ use Laravel\Passport\Http\Controllers\AccessTokenController;
 |
 */
 
-Route::post('/public/Api/access_token', [AccessTokenController::class, 'issueToken']);
+// Not AuthenticateApiToken -- issuing a token is the credential check itself,
+// same as Passport's own /oauth/token. Still throttled per Z-7.1: without
+// this it was a second, unthrottled entry point for brute-forcing
+// client_id/client_secret alongside the throttled primary token endpoint.
+Route::post('/public/Api/access_token', [AccessTokenController::class, 'issueToken'])
+    ->middleware([ApiThrottle::class.':api', LogApiRequest::class]);
 
 $middleware = [AuthenticateApiToken::class, ApiThrottle::class.':api', LogApiRequest::class];
 

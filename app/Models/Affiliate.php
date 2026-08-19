@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * Referral partners (source ga_affiliate, ~49 rows).
@@ -23,8 +25,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $commission
  * @property string $status
  */
-class Affiliate extends Model implements Aclable
+class Affiliate extends Model implements Aclable, AuditableContract
 {
+    use Auditable;
     use Contactable;
     use HasAcl;
     use HasActivities;
