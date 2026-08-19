@@ -184,6 +184,20 @@ it('skips a note whose parent_type does not resolve to a migrated entity', funct
     expect(Note::withoutGlobalScopes()->find('note-2'))->toBeNull();
 });
 
+it('skips a note whose parent_type resolves to a real module but whose parent_id matches nothing there', function () {
+    // Note has no DB-level FK on subject_id (it is polymorphic) -- an
+    // unresolvable parent_id must be caught by an explicit existence check
+    // against the target table, not left to error (or worse, silently
+    // become a dangling reference).
+    DB::connection('legacy')->table('notes')->insert([
+        'id' => 'note-4', 'parent_type' => 'GA_Applicant', 'parent_id' => 'no-such-lead-id',
+    ]);
+
+    $this->artisan('crm:migrate-legacy', ['--only' => 'activities_notes'])->assertExitCode(0);
+
+    expect(Note::withoutGlobalScopes()->find('note-4'))->toBeNull();
+});
+
 it('normalises call direction to lowercase and computes duration_minutes from hours+minutes', function () {
     $company = Company::factory()->create();
     DB::connection('legacy')->table('calls')->insert([

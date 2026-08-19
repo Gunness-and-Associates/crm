@@ -13,6 +13,7 @@ use App\Support\Etl\ClientTransformer;
 use App\Support\Etl\CompanyTransformer;
 use App\Support\Etl\DocumentRevisionTransformer;
 use App\Support\Etl\DocumentTransformer;
+use App\Support\Etl\EmailTransformer;
 use App\Support\Etl\LeadModuleSpec;
 use App\Support\Etl\LeadModuleTransformer;
 use App\Support\Etl\LegacyTransformer;
@@ -61,6 +62,7 @@ final class MigrateLegacyCommand extends Command
         MeetingTransformer $meetings,
         DocumentTransformer $documents,
         DocumentRevisionTransformer $documentRevisions,
+        EmailTransformer $emails,
     ): int {
         /** @var list<LegacyTransformer> $transformers */
         $transformers = [
@@ -82,8 +84,8 @@ final class MigrateLegacyCommand extends Command
             $meetings,
             $documents,
             $documentRevisions,
-            // Appended in load order as each is built: emails -> email
-            // addresses -> audit.
+            $emails,
+            // Appended in load order as each is built: email addresses -> audit.
         ];
 
         $only = $this->stringOption('only');
