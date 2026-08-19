@@ -56,9 +56,12 @@ final class ModuleResourceController extends Controller
         $query = $modelClass::query();
         $this->filters->apply($query, $module, $request);
 
-        if ($this->wantsAssignee($request)) {
+        $wantsAssignee = $this->wantsAssignee($request);
+        if ($wantsAssignee) {
             $query->with('assignedUser');
         }
+
+        $this->applyColumnSelection($query, $module, $request, $wantsAssignee);
 
         $pageSize = $this->pageSize($request);
         $page = $this->stringKeyedArray($request->query('page', []));
@@ -152,9 +155,12 @@ final class ModuleResourceController extends Controller
         $modelClass = $this->resolveModel($module);
         $query = $modelClass::query();
 
-        if ($this->wantsAssignee($request)) {
+        $wantsAssignee = $this->wantsAssignee($request);
+        if ($wantsAssignee) {
             $query->with('assignedUser');
         }
+
+        $this->applyColumnSelection($query, $module, $request, $wantsAssignee);
 
         $record = $query->find($id);
         if ($record === null) {
@@ -162,6 +168,76 @@ final class ModuleResourceController extends Controller
         }
 
         return $record;
+    }
+
+    /**
+     * BACKEND_BRIEF §16 — "never SELECT * when a layout names its columns."
+     * A Studio layout's own published columns aren't a reliable source for this
+     * at the API layer (most modules' layouts aren't published yet — see
+     * MetadataRepository::compile()'s `where('is_published', true)` filter,
+     * and a mechanically Studio-imported layout is deliberately never
+     * auto-published) — the JSON:API sparse fieldset the client already sends
+     * (`?fields[module]=...`) is the equivalent, already-live mechanism: it
+     * names exactly the columns the response will actually use. Only applied
+     * when the caller actually restricts fields — "no restriction" already
+     * means every field is wanted, so selecting everything is correct there,
+     * not a missed optimisation.
+     *
+     * @param  Builder<Model>  $query
+     */
+    private function applyColumnSelection(Builder $query, string $module, Request $request, bool $wantsAssignee): void
+    {
+        $sparse = $this->sparseFields($module, $request);
+        if ($sparse === null) {
+            return;
+        }
+
+        $fieldTypes = $this->registry->fields($module);
+        $knownNames = $this->knownFieldNames($fieldTypes);
+        $columns = ['id'];
+
+        if ($wantsAssignee) {
+            $columns[] = 'assigned_user_id';
+        }
+
+        foreach ($sparse as $name) {
+            if (! in_array($name, $knownNames, true)) {
+                // Same validation toResourceObject() applies -- an unknown
+                // name (typo, stale client) is silently dropped there, so it
+                // must never reach a raw column list here either.
+                continue;
+            }
+
+            if ($name === 'full_name') {
+                // No real column or accessor (app/Support/FullName.php) —
+                // computed from these two at response-build time.
+                $columns[] = 'first_name';
+                $columns[] = 'last_name';
+
+                continue;
+            }
+
+            $field = $fieldTypes[$name] ?? null;
+            if ($field !== null && ($field['is_custom'] ?? false) === true) {
+                // Lives in the {table}_custom sidecar, hydrated by
+                // HasCustomFields via its own id-keyed query — never a column
+                // on the base table's own select list.
+                continue;
+            }
+
+            $columns[] = $name;
+        }
+
+        $query->select(array_values(array_unique($columns)));
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $fieldTypes
+     * @return list<string>
+     */
+    private function knownFieldNames(array $fieldTypes): array
+    {
+        return [...array_keys($fieldTypes), 'assigned_user_id', 'created_at', 'updated_at'];
     }
 
     private function wantsAssignee(Request $request): bool
@@ -254,7 +330,7 @@ final class ModuleResourceController extends Controller
     private function toResourceObject(Model $record, string $module, Request $request): array
     {
         $fieldTypes = $this->registry->fields($module);
-        $knownNames = [...array_keys($fieldTypes), 'assigned_user_id', 'created_at', 'updated_at'];
+        $knownNames = $this->knownFieldNames($fieldTypes);
 
         $requested = $this->sparseFields($module, $request) ?? $knownNames;
 
