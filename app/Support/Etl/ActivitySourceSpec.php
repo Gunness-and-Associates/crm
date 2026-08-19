@@ -2,6 +2,8 @@
 
 namespace App\Support\Etl;
 
+use Illuminate\Database\Eloquent\Model;
+
 /**
  * One source of subject-linkage for a legacy activity table (notes, calls,
  * meetings, documents). BACKEND_BRIEF/DATA_MODEL §3: the ~154 per-module
@@ -17,6 +19,9 @@ namespace App\Support\Etl;
  */
 final class ActivitySourceSpec
 {
+    /**
+     * @param  class-string<Model>  $subjectClass
+     */
     private function __construct(
         public readonly ?string $junctionTable,
         public readonly ?string $moduleTable,
@@ -24,11 +29,17 @@ final class ActivitySourceSpec
         public readonly string $subjectClass,
     ) {}
 
+    /**
+     * @param  class-string<Model>  $subjectClass
+     */
     public static function viaJunction(string $junctionTable, string $moduleTable, string $subjectClass): self
     {
         return new self($junctionTable, $moduleTable, null, $subjectClass);
     }
 
+    /**
+     * @param  class-string<Model>  $subjectClass
+     */
     public static function viaParentType(string $parentType, string $subjectClass): self
     {
         return new self(null, null, $parentType, $subjectClass);
