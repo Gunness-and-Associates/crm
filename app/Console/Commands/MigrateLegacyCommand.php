@@ -13,6 +13,7 @@ use App\Support\Etl\ClientTransformer;
 use App\Support\Etl\CompanyTransformer;
 use App\Support\Etl\DocumentRevisionTransformer;
 use App\Support\Etl\DocumentTransformer;
+use App\Support\Etl\EmailAddressTransformer;
 use App\Support\Etl\EmailTransformer;
 use App\Support\Etl\LeadModuleSpec;
 use App\Support\Etl\LeadModuleTransformer;
@@ -63,6 +64,7 @@ final class MigrateLegacyCommand extends Command
         DocumentTransformer $documents,
         DocumentRevisionTransformer $documentRevisions,
         EmailTransformer $emails,
+        EmailAddressTransformer $emailAddresses,
     ): int {
         /** @var list<LegacyTransformer> $transformers */
         $transformers = [
@@ -85,7 +87,11 @@ final class MigrateLegacyCommand extends Command
             $documents,
             $documentRevisions,
             $emails,
-            // Appended in load order as each is built: email addresses -> audit.
+            $emailAddresses,
+            // §13's load order ends with "audit" -- deliberately no transformer
+            // here. owen-it/laravel-auditing (wired since Z-2.2) is forward-only;
+            // BACKEND_BRIEF rule 12 explicitly forbids recreating the source's
+            // 79 *_audit tables, so there is nothing to backfill.
         ];
 
         $only = $this->stringOption('only');
