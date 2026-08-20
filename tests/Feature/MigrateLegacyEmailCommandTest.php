@@ -4,11 +4,11 @@ use App\Models\Company;
 use App\Models\Email;
 use App\Models\Lead;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 /**
  * Email (Z-6.2 activities, the biggest/last activity type) — parent_type on

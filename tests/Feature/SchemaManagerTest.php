@@ -8,12 +8,12 @@ use App\Support\SchemaManager\ChangeResult;
 use App\Support\SchemaManager\FieldChangeRequest;
 use App\Support\SchemaManager\SchemaManager;
 use App\Support\SchemaManager\SchemaValidationException;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 function leadsModule(): Module
 {

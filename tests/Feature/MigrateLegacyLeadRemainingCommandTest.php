@@ -3,11 +3,11 @@
 use App\Models\Lead;
 use Database\Seeders\MetadataFixtureSeeder;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 /**
  * The remaining ~10 smaller/untargeted legacy lead modules (Z-6.2 part 2),

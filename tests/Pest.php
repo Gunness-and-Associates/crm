@@ -2,6 +2,7 @@
 
 use App\Models\Role;
 use App\Models\RoleModulePermission;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Acl\AccessLevel;
 use Illuminate\Support\Str;
@@ -111,4 +112,31 @@ function actingAsApiClient(Client $client, array $scopes = ['*']): Client
     app()->instance(ResourceServer::class, $mock);
 
     return $client;
+}
+
+/**
+ * Z-8.3: web.php/api.php/legacy_api.php and the Filament panel are now gated
+ * behind tenant resolution (InitializeTenancyByDomain) — every test that
+ * dispatches a real HTTP request through them needs a tenant to resolve to.
+ * "localhost" matches phpunit.xml's APP_URL, so the default test host resolves
+ * without any per-test Host header.
+ *
+ * db_name is set to the current connection's own database — same physical
+ * database as central, no separate tenant database provisioned — mirroring
+ * exactly what the real `tenants:promote-primary` command does in production
+ * (BACKEND_BRIEF_ZAIN.md §14 step 4: "no data is moved").
+ *
+ * Call from a test using DatabaseTruncation, not RefreshDatabase: the
+ * DatabaseTenancyBootstrapper switch to the "tenant" connection is a distinct
+ * PDO connection to that same database, so it can't see anything still sitting
+ * inside an open RefreshDatabase transaction on the original connection.
+ */
+function promotePrimaryTenant(): Tenant
+{
+    $tenant = Tenant::create();
+    $tenant->setInternal('db_name', config('database.connections.'.config('database.default').'.database'));
+    $tenant->save();
+    $tenant->createDomain('localhost');
+
+    return $tenant;
 }

@@ -3,9 +3,9 @@
 use App\Models\Affiliate;
 use App\Models\User;
 use App\Support\Acl\AccessLevel;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 beforeEach(fn () => $this->actingAs(User::factory()->create(['is_admin' => true])));
 

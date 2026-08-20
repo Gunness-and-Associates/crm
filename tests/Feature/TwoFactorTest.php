@@ -1,10 +1,10 @@
 <?php
 
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use PragmaRX\Google2FA\Google2FA;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 it('enables and confirms two-factor with a valid code', function () {
     $user = User::factory()->create();

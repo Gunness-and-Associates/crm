@@ -2,11 +2,11 @@
 
 use App\Models\Client;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 /**
  * Client sources: ga_clients (+cstm, the main table), ga_clientdevelopment2

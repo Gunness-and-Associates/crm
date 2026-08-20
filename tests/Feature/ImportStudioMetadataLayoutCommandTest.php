@@ -4,10 +4,10 @@ use App\Models\Metadata\Field;
 use App\Models\Metadata\Layout;
 use App\Models\Metadata\Module;
 use App\Support\Etl\LegacyViewDefReader;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\File;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 /**
  * Studio metadata import, layout half (Z-6.3 part 2) -- mechanically

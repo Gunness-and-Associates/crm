@@ -2,7 +2,7 @@
 
 use App\Models\PlatformUser;
 use App\Models\Tenant;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\Schema;
 use Stancl\Tenancy\Bootstrappers\CacheTenancyBootstrapper;
 use Stancl\Tenancy\Bootstrappers\DatabaseTenancyBootstrapper;
@@ -13,7 +13,7 @@ use Stancl\Tenancy\Contracts\TenantWithDatabase;
 // Z-8.1 (BACKEND_BRIEF_ZAIN.md §14 step 1-2): package installed, central
 // tables in place, app-level Tenant model, all four bootstrappers registered.
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 it('registers the app Tenant model, not the package default', function () {
     expect(config('tenancy.tenant_model'))->toBe(Tenant::class)

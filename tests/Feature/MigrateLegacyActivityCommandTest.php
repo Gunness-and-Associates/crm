@@ -8,11 +8,11 @@ use App\Models\Lead;
 use App\Models\Meeting;
 use App\Models\Note;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 /**
  * Notes/Calls/Meetings/Documents (Z-6.2 activities, part 1 of the load

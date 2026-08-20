@@ -2,9 +2,9 @@
 
 use App\Models\Setting;
 use App\Support\Settings;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 beforeEach(fn () => app(Settings::class)->flush());
 

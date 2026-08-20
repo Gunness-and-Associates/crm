@@ -3,10 +3,10 @@
 use App\Models\Metadata\Change;
 use App\Support\ChangeLogPruner;
 use App\Support\SchemaManager\Snapshotter;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\Storage;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 it('deletes snapshot files older than the retention window but keeps the change log row', function () {
     $disk = app(Snapshotter::class)->disk();

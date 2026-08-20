@@ -5,12 +5,17 @@ use App\Models\User;
 use App\Support\Acl\AccessLevel;
 use App\Support\MetadataRepository;
 use Database\Seeders\MetadataFixtureSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 
-uses(RefreshDatabase::class);
+// Z-8.3 -- DatabaseTruncation, not RefreshDatabase: promotePrimaryTenant() below
+// makes these requests switch to a "tenant" DB connection, a distinct PDO handle
+// to the same physical database; an open RefreshDatabase transaction on the
+// original connection would hide this test's own fixtures from it.
+uses(DatabaseTruncation::class);
 
 beforeEach(function () {
+    promotePrimaryTenant();
     $this->seed(MetadataFixtureSeeder::class);
 });
 
@@ -27,10 +32,19 @@ it('keeps the companies list under 25 queries per page', function () {
     $user = actingAsApiUser(User::factory()->create(['is_admin' => true]));
     grantAccess($user, 'companies', AccessLevel::All);
 
-    DB::enableQueryLog();
+    // DB::listen(), not enableQueryLog()/getQueryLog(): those target whatever
+    // connection is default AT THE TIME they're called, which is the central
+    // connection here -- the request itself then switches to the "tenant"
+    // connection (Z-8.3), a different connection object, so a log enabled
+    // beforehand on the old one would silently capture nothing. listen() is
+    // connection-agnostic, matching the pattern already used below in this
+    // file for the EXPLAIN test.
+    $queryCount = 0;
+    DB::listen(function () use (&$queryCount) {
+        $queryCount++;
+    });
+
     $this->getJson('/api/v1/companies')->assertOk();
-    $queryCount = count(DB::getQueryLog());
-    DB::flushQueryLog();
 
     expect($queryCount)->toBeLessThan(25);
 });
@@ -48,12 +62,14 @@ it('selects only the requested columns for a sparse fieldset, not every column',
     $user = actingAsApiUser(User::factory()->create(['is_admin' => true]));
     grantAccess($user, 'companies', AccessLevel::All);
 
-    DB::enableQueryLog();
+    $selectQuery = null;
+    DB::listen(function ($query) use (&$selectQuery) {
+        if (str_contains($query->sql, 'from `companies`') && ! str_contains($query->sql, 'count(')) {
+            $selectQuery = $query->sql;
+        }
+    });
+
     $this->getJson('/api/v1/companies?fields[companies]=primary_email')->assertOk();
-    $selectQuery = collect(DB::getQueryLog())
-        ->pluck('query')
-        ->first(fn (string $sql): bool => str_contains($sql, 'from `companies`') && ! str_contains($sql, 'count('));
-    DB::flushQueryLog();
 
     expect($selectQuery)->not->toBeNull()
         ->and($selectQuery)->toContain('`primary_email`')
@@ -73,14 +89,17 @@ it('expands the virtual full_name sparse field into its two real columns', funct
     $user = actingAsApiUser(User::factory()->create(['is_admin' => true]));
     grantAccess($user, 'companies', AccessLevel::All);
 
-    DB::enableQueryLog();
-    $response = $this->getJson('/api/v1/companies?fields[companies]=full_name')->assertOk();
-    $selectQuery = collect(DB::getQueryLog())
-        ->pluck('query')
-        ->first(fn (string $sql): bool => str_contains($sql, 'from `companies`') && ! str_contains($sql, 'count('));
-    DB::flushQueryLog();
+    $selectQuery = null;
+    DB::listen(function ($query) use (&$selectQuery) {
+        if (str_contains($query->sql, 'from `companies`') && ! str_contains($query->sql, 'count(')) {
+            $selectQuery = $query->sql;
+        }
+    });
 
-    expect($selectQuery)->toContain('`first_name`')->toContain('`last_name`');
+    $response = $this->getJson('/api/v1/companies?fields[companies]=full_name')->assertOk();
+
+    expect($selectQuery)->not->toBeNull()
+        ->and($selectQuery)->toContain('`first_name`')->toContain('`last_name`');
     expect($response->json('data.0.attributes.full_name'))->not->toBeNull();
 });
 

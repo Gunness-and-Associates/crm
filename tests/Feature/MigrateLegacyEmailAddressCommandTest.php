@@ -5,11 +5,11 @@ use App\Models\EmailAddress;
 use App\Models\EmailAddressRelation;
 use App\Models\Lead;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 /**
  * Email addresses (Z-6.2, final activities-adjacent step) -- backfills the
