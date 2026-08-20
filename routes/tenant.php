@@ -11,19 +11,27 @@ use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 | Tenant Routes
 |--------------------------------------------------------------------------
 |
-| Here you can register the tenant routes for your application.
-| These routes are loaded by the TenantRouteServiceProvider.
+| This file is mapped by App\Providers\TenancyServiceProvider::mapRoutes() at
+| ->booted() time (i.e. after web.php/api.php are already registered) — a
+| route defined here on a path the real app already uses would silently win
+| the match, since Laravel's route lookup keys by method+URI and a later
+| registration overwrites an earlier one for the same key. The real CRM
+| routes (web.php, api.php, legacy_api.php, the Filament panel) are NOT
+| gated behind tenancy yet — see Z-8.2's PR description — so keep anything
+| registered here off paths those files use, e.g. under a dedicated prefix.
 |
-| Feel free to customize them however you want. Good luck!
+| The route below is a diagnostic proving domain-based tenant resolution
+| actually works (tests/Feature/DomainIdentificationTest.php exercises it);
+| it is not meant to be user-facing.
 |
 */
 
-Route::middleware([
+Route::prefix('_tenancy')->middleware([
     'web',
     InitializeTenancyByDomain::class,
     PreventAccessFromCentralDomains::class,
 ])->group(function () {
-    Route::get('/', function () {
+    Route::get('whoami', function () {
         $tenantId = tenant('id');
         $tenantId = is_scalar($tenantId) ? (string) $tenantId : '';
 
