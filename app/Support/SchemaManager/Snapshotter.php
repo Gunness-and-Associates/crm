@@ -19,14 +19,52 @@ final class Snapshotter
     }
 
     /**
+     * A full-database backup is the same mysqldump mechanism with an empty
+     * table list (mysqldump's own default when given none is "every table")
+     * and its own disk/path — kept apart from schema-change snapshots so a
+     * nightly backup is never mistaken for one, and so ChangeLogPruner's
+     * change-row-driven cleanup (which only ever deletes a path a `Change`
+     * row references) can never touch it.
+     *
+     * @return string the relative backup path (on $this->backupDisk())
+     */
+    public function backup(): string
+    {
+        return $this->dump([], $this->backupDisk(), 'backups');
+    }
+
+    public function backupDisk(): string
+    {
+        return $this->configString('backup.disk', $this->disk());
+    }
+
+    public function restoreBackup(string $path): void
+    {
+        $this->restoreFrom($path, $this->backupDisk());
+    }
+
+    /**
      * @param  list<string>  $tables
      * @return string the relative snapshot path (on $this->disk())
      */
     public function snapshot(array $tables): string
     {
+        return $this->dump($tables, $this->disk(), 'schema-snapshots');
+    }
+
+    public function restore(string $path): void
+    {
+        $this->restoreFrom($path, $this->disk());
+    }
+
+    /**
+     * @param  list<string>  $tables
+     */
+    private function dump(array $tables, string $disk, string $pathPrefix): string
+    {
         $connection = $this->connectionConfig();
 
-        $path = 'schema-snapshots/'.now()->format('Ymd_His').'_'.Str::random(8).'.sql';
+        $path = "{$pathPrefix}/".now()->format('Ymd_His').'_'.Str::random(8).'.sql';
 
         $command = [
             $this->configString('schema-manager.mysqldump_binary', 'mysqldump'),
@@ -39,21 +77,25 @@ final class Snapshotter
             ...$tables,
         ];
 
+        // Symfony Process defaults to a 60s timeout -- fine for a schema-manager
+        // snapshot (one or two tables), but a full-database dump/restore has no
+        // ceiling that's safe to guess at real production data volumes.
         $process = new Process($command, null, ['MYSQL_PWD' => $connection['password']]);
+        $process->setTimeout(null);
         $process->run();
 
         if (! $process->isSuccessful() || $process->getOutput() === '') {
             throw new SnapshotFailed('mysqldump failed: '.$process->getErrorOutput());
         }
 
-        Storage::disk($this->disk())->put($path, $process->getOutput());
+        Storage::disk($disk)->put($path, $process->getOutput());
 
         return $path;
     }
 
-    public function restore(string $path): void
+    private function restoreFrom(string $path, string $disk): void
     {
-        $sql = Storage::disk($this->disk())->get($path);
+        $sql = Storage::disk($disk)->get($path);
         if ($sql === null) {
             throw new SnapshotFailed("Snapshot not found: {$path}");
         }
@@ -69,6 +111,7 @@ final class Snapshotter
         ];
 
         $process = new Process($command, null, ['MYSQL_PWD' => $connection['password']]);
+        $process->setTimeout(null);
         $process->setInput($sql);
         $process->run();
 
