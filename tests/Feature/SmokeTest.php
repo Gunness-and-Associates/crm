@@ -1,7 +1,8 @@
 <?php
 
-// Z-1.1 scaffold smoke tests — prove the app boots on the pinned stack and
-// that the deferred pieces (multi-tenancy) are genuinely absent in v1.
+// Z-1.1 scaffold smoke tests — prove the app boots on the pinned stack.
+// The multi-tenancy absence check (was: "does not ship stancl/tenancy in v1")
+// is superseded by Z-8.1, which installs it — see the inverse assertion below.
 
 it('boots on Laravel 11', function () {
     expect(app()->version())->toStartWith('11.');
@@ -19,6 +20,6 @@ it('exposes the Filament admin login screen', function () {
     $this->get('/admin/login')->assertOk();
 });
 
-it('does not ship stancl/tenancy in v1 (tenancy is Phase 8)', function () {
-    expect(class_exists('Stancl\Tenancy\Tenancy'))->toBeFalse();
+it('ships stancl/tenancy from Phase 8 onward', function () {
+    expect(class_exists('Stancl\Tenancy\Tenancy'))->toBeTrue();
 });
