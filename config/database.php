@@ -56,6 +56,14 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                // Z-8.3 -- real server-side prepared statements (PDO's default here)
+                // can come back "Error 1615: Prepared statement needs to be
+                // re-prepared" when a table's structure changes between prepare and
+                // execute. SchemaManager does live DDL in production (Studio field
+                // changes), and the test suite now does it constantly (DatabaseTruncation
+                // between nearly every test) -- emulating prepares client-side avoids
+                // the server-side statement cache this depends on invalidating.
+                PDO::ATTR_EMULATE_PREPARES => true,
             ]) : [],
         ],
 
@@ -76,6 +84,14 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                // Z-8.3 -- real server-side prepared statements (PDO's default here)
+                // can come back "Error 1615: Prepared statement needs to be
+                // re-prepared" when a table's structure changes between prepare and
+                // execute. SchemaManager does live DDL in production (Studio field
+                // changes), and the test suite now does it constantly (DatabaseTruncation
+                // between nearly every test) -- emulating prepares client-side avoids
+                // the server-side statement cache this depends on invalidating.
+                PDO::ATTR_EMULATE_PREPARES => true,
             ]) : [],
         ],
 
