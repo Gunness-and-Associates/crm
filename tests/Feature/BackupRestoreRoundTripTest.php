@@ -26,11 +26,24 @@ uses(DatabaseTruncation::class);
  * instead, with no transaction left open during the test body.
  */
 it('backs up and restores the whole database, recovering data that was deleted in between', function () {
+    $backupDisk = app(Snapshotter::class)->backupDisk();
+
+    // Other tests in the same run (BackupRehearsalTest) also write into
+    // backups/ on this same disk, and DatabaseTruncation only truncates DB
+    // tables between tests, never storage files -- picking "the latest file
+    // by name" is only reliable once nothing else could be sitting there.
+    // Filenames are second-resolution timestamps, so two backups created in
+    // the same CI-fast second sort by their trailing random suffix instead
+    // of creation order -- exactly the real failure this reproduced in CI
+    // (picked an unrelated earlier backup, so the restored company came back
+    // null). Starting from a clean slate makes "the one file that exists"
+    // unambiguous rather than "the alphabetically-last of however many".
+    Storage::disk($backupDisk)->deleteDirectory('backups');
+
     $company = Company::factory()->create(['industry' => 'Rehearsal Industry']);
 
     $this->artisan('crm:backup')->assertExitCode(0);
 
-    $backupDisk = app(Snapshotter::class)->backupDisk();
     $path = collect(Storage::disk($backupDisk)->files('backups'))->sort()->last();
     expect($path)->not->toBeNull();
 
