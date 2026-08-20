@@ -10,13 +10,18 @@ use App\Support\Ingest\PhoneCleaner;
 use App\Support\Ingest\Sources\MetaLeadFetcher;
 use App\Support\Settings;
 use Database\Seeders\MetadataFixtureSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 
-uses(RefreshDatabase::class);
+// Z-8.3 -- DatabaseTruncation, not RefreshDatabase: promotePrimaryTenant() below
+// makes these requests switch to a "tenant" DB connection, a distinct PDO handle
+// to the same physical database; an open RefreshDatabase transaction on the
+// original connection would hide this test's own fixtures from it.
+uses(DatabaseTruncation::class);
 
 beforeEach(function () {
+    promotePrimaryTenant();
     $this->seed(MetadataFixtureSeeder::class);
     app(Settings::class)->set('ingest.wordpress.api_key', 'test-wp-key', secret: true);
     app(Settings::class)->set('ingest.generic-source.secret', 'test-hmac-secret', secret: true);

@@ -104,6 +104,14 @@ class AppServiceProvider extends ServiceProvider
         // docs/contracts/api-contract.md §1.1. Scopes are built from the same module
         // registry ModuleResourceController uses (Z-5.2) — a module registered there
         // needs no separate scope-list update here.
+        // Z-8.3 -- FilesystemTenancyBootstrapper suffixes storage_path() per tenant
+        // once tenancy initializes; Passport's default key lookup is storage_path()-
+        // based, which would otherwise 404 the real oauth-*.key files the moment any
+        // request goes through tenant resolution. boot() runs before any HTTP request
+        // (and so before tenancy ever initializes), so this captures the real,
+        // un-suffixed path once and pins Passport to it regardless of tenant context.
+        Passport::loadKeysFrom(storage_path());
+
         Passport::tokensExpireIn(now()->addHour());
         Passport::refreshTokensExpireIn(now()->addDays(30));
         Passport::personalAccessTokensExpireIn(now()->addMonths(6));

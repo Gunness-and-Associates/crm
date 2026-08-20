@@ -9,10 +9,10 @@ use App\Models\User;
 use App\Support\Email\EmailSender;
 use App\Support\Email\MergeFieldResolver;
 use Database\Seeders\MetadataFixtureSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\Mail;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 beforeEach(function () {
     $this->seed(MetadataFixtureSeeder::class);

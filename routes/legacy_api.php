@@ -4,8 +4,10 @@ use App\Http\Controllers\Api\Legacy\V8ModuleController;
 use App\Http\Middleware\Api\ApiThrottle;
 use App\Http\Middleware\Api\AuthenticateApiToken;
 use App\Http\Middleware\Api\LogApiRequest;
+use App\Http\Middleware\EndTenancyAfterResponse;
 use Illuminate\Support\Facades\Route;
 use Laravel\Passport\Http\Controllers\AccessTokenController;
+use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,27 +26,32 @@ use Laravel\Passport\Http\Controllers\AccessTokenController;
 | authentication/scope/rate-limit/logging middleware as /api/v1/* (Z-5.3/Z-5.4):
 | a legacy token is a v1 token, just requested from a different path.
 |
+| Z-8.3 (BACKEND_BRIEF_ZAIN.md §14 step 4) — gated behind tenant resolution now
+| that tenant #1 exists (crm:promote-primary-tenant).
+|
 */
 
-// Not AuthenticateApiToken -- issuing a token is the credential check itself,
-// same as Passport's own /oauth/token. Still throttled per Z-7.1: without
-// this it was a second, unthrottled entry point for brute-forcing
-// client_id/client_secret alongside the throttled primary token endpoint.
-Route::post('/public/Api/access_token', [AccessTokenController::class, 'issueToken'])
-    ->middleware([ApiThrottle::class.':api', LogApiRequest::class]);
+Route::middleware([InitializeTenancyByDomain::class, EndTenancyAfterResponse::class])->group(function () {
+    // Not AuthenticateApiToken -- issuing a token is the credential check itself,
+    // same as Passport's own /oauth/token. Still throttled per Z-7.1: without
+    // this it was a second, unthrottled entry point for brute-forcing
+    // client_id/client_secret alongside the throttled primary token endpoint.
+    Route::post('/public/Api/access_token', [AccessTokenController::class, 'issueToken'])
+        ->middleware([ApiThrottle::class.':api', LogApiRequest::class]);
 
-$middleware = [AuthenticateApiToken::class, ApiThrottle::class.':api', LogApiRequest::class];
+    $middleware = [AuthenticateApiToken::class, ApiThrottle::class.':api', LogApiRequest::class];
 
-Route::prefix('public/Api/V8/module')->middleware($middleware)->group(function () {
-    Route::get('{legacyModule}', [V8ModuleController::class, 'index'])->middleware('scope');
-    Route::get('{legacyModule}/{id}', [V8ModuleController::class, 'show'])->middleware('scope');
-    Route::delete('{legacyModule}/{id}', [V8ModuleController::class, 'destroy'])->middleware('scope');
+    Route::prefix('public/Api/V8/module')->middleware($middleware)->group(function () {
+        Route::get('{legacyModule}', [V8ModuleController::class, 'index'])->middleware('scope');
+        Route::get('{legacyModule}/{id}', [V8ModuleController::class, 'show'])->middleware('scope');
+        Route::delete('{legacyModule}/{id}', [V8ModuleController::class, 'destroy'])->middleware('scope');
+    });
+
+    // Create/update carry `data.type` (and, for update, `data.id`) in the body instead
+    // of the URL — matching the one verified write shape in §2.1 (`PATCH /Api/V8/module`).
+    Route::post('/public/Api/V8/module', [V8ModuleController::class, 'store'])
+        ->middleware([...$middleware, 'scope']);
+
+    Route::patch('/public/Api/V8/module', [V8ModuleController::class, 'update'])
+        ->middleware([...$middleware, 'scope']);
 });
-
-// Create/update carry `data.type` (and, for update, `data.id`) in the body instead
-// of the URL — matching the one verified write shape in §2.1 (`PATCH /Api/V8/module`).
-Route::post('/public/Api/V8/module', [V8ModuleController::class, 'store'])
-    ->middleware([...$middleware, 'scope']);
-
-Route::patch('/public/Api/V8/module', [V8ModuleController::class, 'update'])
-    ->middleware([...$middleware, 'scope']);

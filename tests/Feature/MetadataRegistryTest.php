@@ -8,9 +8,9 @@ use App\Models\Metadata\OptionItem;
 use App\Models\Metadata\OptionList;
 use App\Models\User;
 use Illuminate\Database\QueryException;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 it('uses uuid keys across metadata tables', function () {
     foreach ([Module::factory()->create(), Field::factory()->create(), OptionList::factory()->create()] as $model) {

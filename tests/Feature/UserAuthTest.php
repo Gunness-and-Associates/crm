@@ -1,11 +1,11 @@
 <?php
 
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules\Password;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 it('gives users a char(36) uuid primary key', function () {
     $user = User::factory()->create();

@@ -4,12 +4,20 @@ use App\Exceptions\Api\ApiException;
 use App\Http\Middleware\Api\EnforceIdempotencyKey;
 use App\Http\Middleware\Api\SetETag;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
-uses(RefreshDatabase::class);
+// Z-8.3 -- DatabaseTruncation, not RefreshDatabase: promotePrimaryTenant() below
+// makes these requests switch to a "tenant" DB connection, a distinct PDO handle
+// to the same physical database; an open RefreshDatabase transaction on the
+// original connection would hide this test's own fixtures from it.
+uses(DatabaseTruncation::class);
+
+beforeEach(function () {
+    promotePrimaryTenant();
+});
 
 it('renders an unknown /api/v1 route as an RFC 7807 404, not a default error page', function () {
     // Hits the real {module} route (unlike this file's other _test/* fixture routes,

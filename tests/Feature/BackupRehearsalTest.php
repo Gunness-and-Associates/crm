@@ -1,10 +1,10 @@
 <?php
 
 use App\Support\SchemaManager\Snapshotter;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\Storage;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 /**
  * Z-7.3 -- "backups and restore rehearsal" (PROJECT_PLAN.md Phase 7 DoD).

@@ -7,9 +7,9 @@ use App\Models\User;
 use App\Support\LayoutManager;
 use App\Support\MetadataRepository;
 use App\Support\MetadataValidationException;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 function layoutModule(): Module
 {

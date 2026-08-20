@@ -5,10 +5,10 @@ use App\Mail\DailyCountReportMail;
 use App\Models\Lead;
 use App\Models\Student;
 use App\Support\Settings;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\Mail;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 it('is a no-op until report recipients are configured', function () {
     Mail::fake();

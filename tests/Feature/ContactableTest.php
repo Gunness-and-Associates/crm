@@ -5,12 +5,12 @@ use App\Models\Metadata\Module;
 use App\Models\User;
 use App\Support\MetadataRepository;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\Fixtures\ContactableFixture;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 beforeEach(function () {
     // Z-2.3 wires ContactableFixture into the ACL engine (HasAcl); these tests are not

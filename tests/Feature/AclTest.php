@@ -7,13 +7,13 @@ use App\Models\User;
 use App\Support\Acl;
 use App\Support\Acl\AccessLevel;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\Schema;
 use Tests\Fixtures\ContactableFixture;
 use Tests\Fixtures\ContactableFixturePolicy;
 use Tests\Fixtures\CountVisibleFixturesJob;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 beforeEach(function () {
     if (! Schema::hasTable('contactable_fixtures')) {

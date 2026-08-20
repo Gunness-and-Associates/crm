@@ -1,10 +1,10 @@
 <?php
 
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use OwenIt\Auditing\Models\Audit;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 it('audits a change to a user', function () {
     $user = User::factory()->create(['name' => 'Amina']);

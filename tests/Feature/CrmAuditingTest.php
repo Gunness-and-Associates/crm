@@ -8,10 +8,10 @@ use App\Models\Lead;
 use App\Models\NewsletterSubscriber;
 use App\Models\Student;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use OwenIt\Auditing\Models\Audit;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 /**
  * BACKEND_BRIEF §7 -- "Audit: every create, update and delete of a CRM

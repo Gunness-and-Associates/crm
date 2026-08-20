@@ -6,12 +6,12 @@ use App\Models\Lead;
 use App\Models\Task;
 use App\Models\User;
 use App\Notifications\ReminderNotification;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Tests\Fixtures\ContactableFixture;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 it('notifies the assigned user of an overdue task, but not a completed one', function () {
     Notification::fake();

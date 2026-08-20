@@ -4,10 +4,10 @@ use App\Models\Metadata\Module;
 use App\Support\LayoutValidator;
 use App\Support\MetadataRepository;
 use Database\Seeders\MetadataFixtureSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\Cache;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 beforeEach(fn () => Cache::flush());
 

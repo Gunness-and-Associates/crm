@@ -9,12 +9,12 @@ use App\Models\User;
 use App\Support\MetadataValidationException;
 use App\Support\OptionListManager;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
-uses(RefreshDatabase::class);
+uses(DatabaseTruncation::class);
 
 it('adds an option item to a list', function () {
     $list = OptionList::factory()->create();

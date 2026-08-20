@@ -4,10 +4,18 @@ use App\Models\Lead;
 use App\Models\User;
 use App\Support\Acl\AccessLevel;
 use Database\Seeders\MetadataFixtureSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Laravel\Passport\ClientRepository;
 
-uses(RefreshDatabase::class);
+// Z-8.3 -- DatabaseTruncation, not RefreshDatabase: promotePrimaryTenant() below
+// makes these requests switch to a "tenant" DB connection, a distinct PDO handle
+// to the same physical database; an open RefreshDatabase transaction on the
+// original connection would hide this test's own fixtures from it.
+uses(DatabaseTruncation::class);
+
+beforeEach(function () {
+    promotePrimaryTenant();
+});
 
 it('rejects a request with no bearer token at all', function () {
     $this->getJson('/api/v1/leads')

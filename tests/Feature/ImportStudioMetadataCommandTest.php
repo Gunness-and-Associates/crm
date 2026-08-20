@@ -8,6 +8,17 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+// Z-8.3 -- deliberately RefreshDatabase, not DatabaseTruncation: this file's
+// own tests create real {table}_custom sidecar tables via Schema::create()
+// (dynamic DDL). DatabaseTruncation caches its connection's table list on
+// first use and never recomputes it, so a table that appears mid-suite is
+// truncated as empty but never dropped -- a later test asserting it doesn't
+// exist would fail, and the trait's own truncation loop throws if that table
+// is ever dropped out from under its stale cache. RefreshDatabase's
+// transaction-per-test genuinely reverts the CREATE TABLE here, verified
+// empirically. No test in this file makes an HTTP request through a
+// tenancy-gated route, so it doesn't need the connection-switch safety
+// DatabaseTruncation exists for elsewhere in this suite.
 uses(RefreshDatabase::class);
 
 /**
@@ -39,8 +50,15 @@ beforeEach(function () {
         $table->string('ext3')->nullable();
     });
 
-    Module::query()->create(['key' => 'companies', 'label' => 'Companies', 'table_name' => 'companies', 'base_type' => 'company', 'enabled' => true]);
-    Module::query()->create(['key' => 'affiliates', 'label' => 'Affiliates', 'table_name' => 'affiliates', 'base_type' => 'generic', 'enabled' => true]);
+    // firstOrCreate, not create: this file stays on RefreshDatabase (its own
+    // dynamically-created {table}_custom sidecar tables are incompatible with
+    // DatabaseTruncation -- see the comment above the trait declaration), so
+    // a 'companies'/'affiliates' Module row committed by an earlier
+    // DatabaseTruncation-based test in the same parallel worker (e.g. via
+    // MetadataFixtureSeeder) may already exist when this file's first test
+    // starts.
+    Module::query()->firstOrCreate(['key' => 'companies'], ['label' => 'Companies', 'table_name' => 'companies', 'base_type' => 'company', 'enabled' => true]);
+    Module::query()->firstOrCreate(['key' => 'affiliates'], ['label' => 'Affiliates', 'table_name' => 'affiliates', 'base_type' => 'generic', 'enabled' => true]);
 });
 
 function insertLegacyField(string $customModule, string $name, string $type, array $overrides = []): void
