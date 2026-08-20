@@ -21,6 +21,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // `then`, which runs with no group/prefix wrapper at all.
         then: function () {
             require __DIR__.'/../routes/legacy_api.php';
+
+            // Z-8.2 (BACKEND_BRIEF_ZAIN.md §14 step 3) — central (landlord) routes,
+            // still an empty stub (tests/Feature/TenancyReadyTest.php enforces this
+            // until Shahmeer's platform panel lands); wiring it in now so it's ready.
+            require __DIR__.'/../routes/central.php';
         },
     )
     ->withMiddleware(function (Middleware $middleware) {

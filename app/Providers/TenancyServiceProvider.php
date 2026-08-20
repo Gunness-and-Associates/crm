@@ -107,6 +107,13 @@ class TenancyServiceProvider extends ServiceProvider
         $this->mapRoutes();
 
         $this->makeTenancyMiddlewareHighestPriority();
+
+        // A hostname that never matches a tenant domain (a typo'd subdomain, a
+        // wildcard-DNS entry for a company that was never provisioned) should
+        // 404 like any other unmatched route — not leak a raw exception/500.
+        Middleware\InitializeTenancyByDomain::$onFail = function () {
+            abort(404);
+        };
     }
 
     protected function bootEvents(): void

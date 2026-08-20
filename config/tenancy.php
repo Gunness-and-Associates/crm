@@ -23,11 +23,16 @@ return [
      * The list of domains hosting your central app.
      *
      * Only relevant if you're using the domain or subdomain identification middleware.
+     *
+     * A tenant domain is any hostname ending in one of these entries but not
+     * equal to one of them, so in production this must be the real root
+     * domain (e.g. "crm.example.com") for InitializeTenancyByDomain's
+     * suffix check to recognize "acme.crm.example.com" as a tenant domain.
+     * Wildcard DNS and a TLS certificate covering that root domain (or a
+     * wildcard cert) are an infrastructure/ops prerequisite, not something
+     * this config controls.
      */
-    'central_domains' => [
-        '127.0.0.1',
-        'localhost',
-    ],
+    'central_domains' => array_filter(explode(',', env('CENTRAL_DOMAINS', '127.0.0.1,localhost'))),
 
     /**
      * Tenancy bootstrappers are executed when tenancy is initialized.
