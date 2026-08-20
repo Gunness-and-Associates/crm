@@ -17,3 +17,8 @@ Schedule::command('schema:prune-snapshots')->daily();
 // production, the database driver locally/CI) rather than inline on the scheduler.
 Schedule::job(new SendDailyCountReportJob)->dailyAt('07:00');
 Schedule::job(new SendReminderNotificationsJob)->dailyAt('08:00');
+
+// Z-7.3: BACKEND_BRIEF's own open-question default -- "nightly dump to
+// object storage." withoutOverlapping guards against a slow dump still
+// running when the next night's fires.
+Schedule::command('crm:backup')->dailyAt('02:00')->withoutOverlapping();
