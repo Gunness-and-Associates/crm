@@ -49,3 +49,20 @@ it('hashes the platform user password and hides it from serialization', function
     expect($platformUser->password)->not->toBe('plaintext-password')
         ->and($platformUser->toArray())->not->toHaveKey('password');
 });
+
+// Z-8.4 (BACKEND_BRIEF_ZAIN.md §14 step 7): "add tenants:migrate to the
+// deployment pipeline" -- the command itself ships with the package
+// (registered by its own service provider); the only app-specific wiring is
+// migration_parameters pointing it at database/migrations/tenant, not the
+// default migrations/ folder.
+it('points tenants:migrate at database/migrations/tenant', function () {
+    $parameters = config('tenancy.migration_parameters');
+
+    expect(is_array($parameters) ? $parameters['--path'] ?? null : null)->toBe([database_path('migrations/tenant')]);
+});
+
+it('runs tenants:migrate against an existing tenant without error', function () {
+    $tenant = promotePrimaryTenant();
+
+    $this->artisan('tenants:migrate', ['--tenants' => [$tenant->id]])->assertExitCode(0);
+});

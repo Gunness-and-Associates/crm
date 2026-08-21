@@ -133,7 +133,15 @@ function actingAsApiClient(Client $client, array $scopes = ['*']): Client
  */
 function promotePrimaryTenant(): Tenant
 {
-    $tenant = Tenant::create();
+    // create_database => false *before* the initial save: Tenant::create()
+    // alone fires TenantCreated -> CreateDatabase, which -- since db_name
+    // isn't set yet at that point -- would provision a genuinely separate,
+    // throwaway physical database via the default generator, immediately
+    // orphaned the moment the very next line points db_name at this shared
+    // test database instead. Confirmed empirically: dozens of real
+    // `tenant{uuid}` databases were left behind by test runs before this.
+    $tenant = new Tenant;
+    $tenant->setInternal('create_database', false);
     $tenant->setInternal('db_name', config('database.connections.'.config('database.default').'.database'));
     $tenant->save();
     $tenant->createDomain('localhost');
