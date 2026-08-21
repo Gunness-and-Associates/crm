@@ -44,6 +44,26 @@ final class Snapshotter
     }
 
     /**
+     * Writes an already-captured dump (captureDump()) to the backup disk
+     * under a caller-chosen path prefix instead of the shared "backups/"
+     * one -- Z-8.4's per-tenant backup keeps each tenant's dumps
+     * distinguishable by path rather than by timestamp and random suffix
+     * alone. Kept as a separate step from captureDump() so the caller can
+     * capture while a tenant's connection is active and write only after
+     * reverting to central -- see captureDump()'s own docblock for why.
+     *
+     * @return string the relative path written (on backupDisk())
+     */
+    public function storeDump(string $sql, string $pathPrefix): string
+    {
+        $path = "{$pathPrefix}/".now()->format('Ymd_His').'_'.Str::random(8).'.sql';
+
+        Storage::disk($this->backupDisk())->put($path, $sql);
+
+        return $path;
+    }
+
+    /**
      * @param  list<string>  $tables
      * @return string the relative snapshot path (on $this->disk())
      */
@@ -58,13 +78,20 @@ final class Snapshotter
     }
 
     /**
+     * The mysqldump call in isolation, with no storage write -- the piece
+     * that must run while a specific tenant's connection is active. Exposed
+     * for callers (Z-8.4's per-tenant backup) that need the dump captured
+     * inside a tenant's context but written to storage after reverting to
+     * central: `local`/`public` are tenant-suffixed disks
+     * (config/tenancy.php), so a Storage::put() made while a tenant is still
+     * initialized would land under that tenant's own suffixed subtree
+     * instead of the shared backup location every tenant's dumps belong on.
+     *
      * @param  list<string>  $tables
      */
-    private function dump(array $tables, string $disk, string $pathPrefix): string
+    public function captureDump(array $tables = []): string
     {
         $connection = $this->connectionConfig();
-
-        $path = "{$pathPrefix}/".now()->format('Ymd_His').'_'.Str::random(8).'.sql';
 
         $command = [
             $this->configString('schema-manager.mysqldump_binary', 'mysqldump'),
@@ -88,7 +115,19 @@ final class Snapshotter
             throw new SnapshotFailed('mysqldump failed: '.$process->getErrorOutput());
         }
 
-        Storage::disk($disk)->put($path, $process->getOutput());
+        return $process->getOutput();
+    }
+
+    /**
+     * @param  list<string>  $tables
+     */
+    private function dump(array $tables, string $disk, string $pathPrefix): string
+    {
+        $sql = $this->captureDump($tables);
+
+        $path = "{$pathPrefix}/".now()->format('Ymd_His').'_'.Str::random(8).'.sql';
+
+        Storage::disk($disk)->put($path, $sql);
 
         return $path;
     }

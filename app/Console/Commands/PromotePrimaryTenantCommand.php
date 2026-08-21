@@ -13,6 +13,15 @@ use Illuminate\Console\Command;
  * on tenancy init is just another connection to that same physical database.
  *
  * Idempotent: running it again when tenant #1 already exists is a no-op.
+ *
+ * Z-8.4 fix: sets the create_database internal flag to false before the
+ * tenant is saved. Without it, saving the tenant still fires TenantCreated
+ * -> the CreateDatabase job, which checks whether a database with this
+ * name already exists and throws TenantDatabaseAlreadyExistsException if
+ * it does -- which it always does here, since db_name is deliberately the
+ * app's own already-existing database. Reproduced for real: running this
+ * command against a real, already-migrated database failed outright with
+ * that exception every time, before this fix.
  */
 final class PromotePrimaryTenantCommand extends Command
 {
@@ -34,6 +43,7 @@ final class PromotePrimaryTenantCommand extends Command
         $defaultConnection = is_string($defaultConnection) ? $defaultConnection : 'mysql';
 
         $tenant = new Tenant;
+        $tenant->setInternal('create_database', false);
         $tenant->setInternal('db_name', config("database.connections.{$defaultConnection}.database"));
         $tenant->save();
         $tenant->createDomain($domain);
