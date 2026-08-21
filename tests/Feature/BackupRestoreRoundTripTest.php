@@ -1,9 +1,8 @@
 <?php
 
 use App\Models\Company;
-use App\Support\SchemaManager\Snapshotter;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Artisan;
 
 uses(DatabaseTruncation::class);
 
@@ -26,25 +25,30 @@ uses(DatabaseTruncation::class);
  * instead, with no transaction left open during the test body.
  */
 it('backs up and restores the whole database, recovering data that was deleted in between', function () {
-    $backupDisk = app(Snapshotter::class)->backupDisk();
-
-    // Other tests in the same run (BackupRehearsalTest) also write into
-    // backups/ on this same disk, and DatabaseTruncation only truncates DB
-    // tables between tests, never storage files -- picking "the latest file
-    // by name" is only reliable once nothing else could be sitting there.
-    // Filenames are second-resolution timestamps, so two backups created in
-    // the same CI-fast second sort by their trailing random suffix instead
-    // of creation order -- exactly the real failure this reproduced in CI
-    // (picked an unrelated earlier backup, so the restored company came back
-    // null). Starting from a clean slate makes "the one file that exists"
-    // unambiguous rather than "the alphabetically-last of however many".
-    Storage::disk($backupDisk)->deleteDirectory('backups');
-
+    // Other tests in the same run (BackupRehearsalTest, and now Z-8.4's
+    // per-tenant backup tests) also write into this same disk, and different
+    // parallel *workers* share the same physical storage disk (unlike the
+    // database, which is per-worker) -- so picking "the file that just
+    // appeared" by listing the directory is inherently racy against whatever
+    // another worker writes at the same moment, no matter how the listing is
+    // filtered or timed. Confirmed: an earlier version of this test picked
+    // "the latest file in backups/ by name" and reproducibly failed under a
+    // full parallel run (passed every time run in isolation) -- a different
+    // worker's file landed in between this test's own write and its own
+    // listing. Reading the path crm:backup itself reports it wrote, instead
+    // of re-discovering it via the directory, has no dependency on what else
+    // is in that directory at all.
     $company = Company::factory()->create(['industry' => 'Rehearsal Industry']);
 
-    $this->artisan('crm:backup')->assertExitCode(0);
+    // Artisan::call(), not $this->artisan(): the test helper runs the command
+    // against its own mocked output (for expectsOutput()/assertExitCode()),
+    // which Artisan::output() below can't see. Artisan::call() goes through
+    // the real console kernel, whose output buffer Artisan::output() reads.
+    $exitCode = Artisan::call('crm:backup');
+    expect($exitCode)->toBe(0);
 
-    $path = collect(Storage::disk($backupDisk)->files('backups'))->sort()->last();
+    preg_match('/Backup written: (\S+)/', Artisan::output(), $matches);
+    $path = $matches[1] ?? null;
     expect($path)->not->toBeNull();
 
     $company->forceDelete();
